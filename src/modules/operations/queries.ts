@@ -1,0 +1,5 @@
+import "server-only";
+import { and, desc, eq, inArray } from "drizzle-orm";
+import { getDatabase } from "@/db";
+import { customers, orders, serviceRequests, warrantyItems } from "@/db/schema";
+export async function listOpenServiceRequests(organizationId:string){return getDatabase().select({id:serviceRequests.id,title:serviceRequests.title,description:serviceRequests.description,status:serviceRequests.status,openedAt:serviceRequests.openedAt,orderId:orders.id,orderNumber:orders.orderNumber,orderTitle:orders.title,customerName:customers.name,warrantyName:warrantyItems.name}).from(serviceRequests).innerJoin(orders,and(eq(orders.organizationId,serviceRequests.organizationId),eq(orders.id,serviceRequests.orderId))).innerJoin(customers,and(eq(customers.organizationId,orders.organizationId),eq(customers.id,orders.customerId))).leftJoin(warrantyItems,eq(warrantyItems.id,serviceRequests.warrantyItemId)).where(and(eq(serviceRequests.organizationId,organizationId),inArray(serviceRequests.status,["open","in_progress","resolved"]))).orderBy(desc(serviceRequests.openedAt));}

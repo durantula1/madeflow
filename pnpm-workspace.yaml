@@ -1,0 +1,11 @@
+packages: []
+
+autoInstallPeers: false
+
+allowBuilds:
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
+
+overrides:
+  electron-to-chromium: 1.5.406
