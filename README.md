@@ -1,67 +1,46 @@
 # MadeFlow
 
-Работеща beta платформа за производители по поръчка: спецификация, оферта,
-неизменими версии, клиентско одобрение, файлове, ръчни плащания, монтаж,
-гаранции и сервиз. Stripe не е включен в beta scope-а.
+Mobile-first пилот за договорени оферти, промени, срокове, етапи и плащания
+по строителни и ремонтни обекти.
+
+Основният поток е: обект → чернова → замразена версия → защитен линк →
+одобрение, искане за промяна или отказ. Клиентът няма Supabase Auth акаунт;
+bootstrap линкът създава отделна HttpOnly portal session.
 
 ## Стек
 
-- Next.js 16.3 / React 19 / TypeScript 5.9
-- Tailwind CSS 4 и shadcn с React Aria primitives
-- Supabase Auth, Storage и Edge Functions
-- PostgreSQL 17 / Drizzle ORM
-- Vitest и Playwright
-
-## Supabase
-
-Hosted beta проектът е `MadeFlow Beta` (`xaydfdefyzeoulttjliz`) в
-`eu-central-1`. Приложени са миграциите от [`drizzle/`](./drizzle), включително:
-
-- 22 tenant-aware business таблици в частна `app` schema;
-- deny-by-default RLS и ограничени grants;
-- неизменими version/approval/activity записи;
-- частен `order-files` bucket;
-- platform шаблон за мебели и кухни;
-- `portal-file` Edge Function за краткоживеещи клиентски downloads.
+- Next.js 16.3.5, React 19.2 и TypeScript 5.9;
+- Tailwind CSS 4 и shadcn с React Aria primitives;
+- Supabase Auth, PostgreSQL и private Storage;
+- Drizzle ORM и `postgres.js` за trusted server access.
 
 ## Локално стартиране
 
-Изисква Node `24.19.0` и pnpm `11.21.0`.
+Изисква Node 24.19+ и pnpm 11.21.
 
 1. Копирай `.env.example` като `.env.local`.
-2. В Supabase Dashboard отвори **Connect → Transaction pooler** и постави
-   server-only connection string-а като `DATABASE_URL`. Не използвай този URL в
-   `NEXT_PUBLIC_*` променлива и не го commit-вай.
-3. Попълни публичните Supabase URL и publishable key.
-4. Стартирай:
+2. Създай отделен Supabase проект за MadeFlow.
+3. Попълни publishable URL/key, server-only `DATABASE_URL` и постоянен `PORTAL_LINK_SECRET`.
+4. Приложи миграциите от `drizzle/` (или еквивалентната Supabase migration).
+5. Стартирай `pnpm dev`.
 
 ```bash
 pnpm install
-pnpm dev
-```
-
-`DATABASE_MIGRATION_URL` е нужен само за директно пускане на Drizzle migrations;
-hosted beta миграциите вече са приложени чрез Supabase.
-
-## Проверки
-
-```bash
 pnpm typecheck
 pnpm lint
-pnpm test
-pnpm test:e2e
 pnpm build
 ```
 
-## Ключови граници за сигурност
+## Сигурност
 
-- Browser-ът получава само Supabase publishable key.
-- Business заявките се изпълняват server-side и винаги включват
-  `organization_id`.
-- Порталните tokens се съхраняват само като SHA-256 hash.
-- Одобрената версия пази каноничен SHA-256 hash на спецификацията, офертата и
-  template snapshot-а.
-- Клиентският file resolver е достъпен само за Edge Function service role и
-  валидира token hash, version manifest, expiry и revocation.
+- raw bootstrap и session tokens никога не се записват — пази се SHA-256 hash;
+- portal cookie е HttpOnly, Secure в production и SameSite=Lax; клиентският PDF маршрут проверява същата сесия;
+- portal страниците са `private, no-store`, `no-referrer` и не са frame-able;
+- browser-ът не чете business таблиците през Supabase Data API;
+- изпратената версия пази canonical content hash и съдържанието ѝ е защитено
+  от database trigger;
+- решенията и timeline events са append-only и idempotent.
 
-Архитектурните решения и state machine-ите са в [`docs/`](./docs).
+Пилотът не издава фактури. Старите MadeFlow passport маршрути са достъпни
+само за owner, докато бъдат премахнати след пилота. Подробните стъпки за
+приемане са в `docs/implementation-plan.md`.

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useRef } from "react";
@@ -29,20 +30,20 @@ import {
 const chapters = [
   {
     number: "01",
-    eyebrow: "СПЕЦИФИКАЦИЯ",
+    eyebrow: "ДОКУМЕНТИРАНЕ",
     title: (
       <>
-        ВСИЧКО
+        ПРОМЯНАТА
         <br />
         ЗАПОЧВА <i>ясно.</i>
       </>
     ),
-    text: "Размери, материали, файлове и цена живеят в една работна версия — не в пет чата и три таблици.",
+    text: "Глас, снимки, крайна цена и отражение върху срока се събират на място — докато детайлите още са пред очите ти.",
     range: [0, 0.02, 0.19, 0.27],
   },
   {
     number: "02",
-    eyebrow: "КЛИЕНТСКО ОДОБРЕНИЕ",
+    eyebrow: "ИЗПРАЩАНЕ",
     title: (
       <>
         ЕДИН ЛИНК.
@@ -55,20 +56,20 @@ const chapters = [
   },
   {
     number: "03",
-    eyebrow: "ПРОИЗВОДСТВО",
+    eyebrow: "ВЕРСИИ",
     title: (
       <>
-        ЕКИПЪТ
+        НИЩО НЕ СЕ
         <br />
-        РАБОТИ <i>в синхрон.</i>
+        <i>презаписва.</i>
       </>
     ),
-    text: "Одобрената версия е единственият източник на истина. Няма догадки, стари файлове или скъпи повторения.",
+    text: "Всяка корекция създава нова ревизия. Одобреното остава заключено, а следващият разговор започва от ясна база.",
     range: [0.47, 0.57, 0.7, 0.8],
   },
   {
     number: "04",
-    eyebrow: "МОНТАЖ И СЕРВИЗ",
+    eyebrow: "ИСТОРИЯ",
     title: (
       <>
         ИСТОРИЯТА
@@ -76,7 +77,7 @@ const chapters = [
         ОСТАВА <i>цяла.</i>
       </>
     ),
-    text: "Монтаж, плащания, гаранция и сервиз продължават в същия паспорт — дълго след предаването.",
+    text: "Кой, кога и какво е решил остава в дневника на обекта — за екипа, клиента и следващия етап от работата.",
     range: [0.73, 0.83, 1, 1],
   },
 ] as const;
@@ -85,32 +86,27 @@ const features = [
   {
     icon: Layers3,
     number: "01",
-    title: "Версии без хаос",
-    text: "Всяка промяна има номер, дата и контекст. Екипът винаги знае коя версия е последна.",
+    title: "Под минута на обекта",
+    text: "Кратко описание, гласова бележка, до три снимки, цена и срок — в един бърз поток.",
     accent: "sky",
   },
   {
     icon: MessageSquareText,
     number: "02",
-    title: "Одобрение без гонене",
+    title: "Одобрение без профил",
     text: "Изпращаш защитена връзка. Клиентът преглежда, коментира и одобрява от телефона си.",
     accent: "coral",
   },
   {
     icon: Wrench,
     number: "03",
-    title: "Следа след монтажа",
-    text: "Файлове, плащания, гаранции и сервиз остават част от поръчката, когато потрябват.",
+    title: "История без спор",
+    text: "Всяка изпратена версия и всяко решение имат точен час, автор и непроменимо съдържание.",
     accent: "lime",
   },
 ] as const;
 
-const storyStages = [
-  "СПЕЦИФИКАЦИЯ",
-  "ОДОБРЕНИЕ",
-  "ИЗРАБОТКА",
-  "МОНТАЖ",
-] as const;
+const storyStages = ["ЧЕРНОВА", "ИЗПРАЩАНЕ", "РЕШЕНИЕ", "ИЗПЪЛНЕНИЕ"] as const;
 
 function Reveal({
   children,
@@ -232,8 +228,8 @@ function FlowStory() {
         />
         <div className="mf-story-grid absolute inset-0" />
         <div className="absolute left-[6vw] right-[6vw] top-24 z-20 flex items-center justify-between font-mono text-[9px] tracking-[0.16em] text-[#c6dfdf]">
-          <span>LIVE ORDER PASSPORT</span>
-          <span>MF / 0128 / SOFIA</span>
+          <span>LIVE CHANGE RECORD</span>
+          <span>MF / 0042 / SOFIA</span>
         </div>
 
         <div className="relative z-10 mx-auto grid h-full max-w-[1500px] items-center gap-10 px-[6vw] lg:grid-cols-[0.9fr_1.1fr]">
@@ -256,21 +252,21 @@ function FlowStory() {
                 <div className="flex items-start justify-between border-b border-[#17364a]/10 pb-5">
                   <div>
                     <p className="font-mono text-[9px] font-bold tracking-[0.14em] text-[#ef6c54]">
-                      MF-000128
+                      MF-000042
                     </p>
                     <h3 className="mt-1 text-xl font-black tracking-[-0.04em] sm:text-2xl">
-                      Кухня · Лозенец
+                      Къща · Бояна
                     </h3>
                   </div>
                   <span className="rounded-full bg-[#ffe7a8] px-3 py-1.5 text-[10px] font-bold text-[#755710]">
-                    В ИЗРАБОТКА
+                    ЧАКА ОДОБРЕНИЕ
                   </span>
                 </div>
                 <div className="grid grid-cols-3 gap-2 py-4">
                   {[
-                    ["КЛИЕНТ", "Елена П."],
-                    ["ВЕРСИЯ", "v3"],
-                    ["СТОЙНОСТ", "12 480 €"],
+                    ["КЛИЕНТ", "Иван П."],
+                    ["ВЕРСИЯ", "v2"],
+                    ["СТОЙНОСТ", "+384 €"],
                   ].map(([label, value]) => (
                     <div key={label} className="rounded-xl bg-[#eef3f0] p-2.5">
                       <p className="font-mono text-[7px] tracking-[0.1em] text-[#6c858d]">
@@ -286,29 +282,29 @@ function FlowStory() {
                   progress={smoothProgress}
                   threshold={0.05}
                   icon={Ruler}
-                  title="Спецификацията е готова"
-                  detail="Размери, материали и механизми"
+                  title="Промяната е документирана"
+                  detail="Глас, снимки, цена и срок"
                 />
                 <StoryStatus
                   progress={smoothProgress}
                   threshold={0.3}
                   icon={FileCheck2}
-                  title="Версия v3 е одобрена"
+                  title="Версия v2 е изпратена"
                   detail="Одобрено от клиента · 14:32"
                 />
                 <StoryStatus
                   progress={smoothProgress}
                   threshold={0.58}
                   icon={Layers3}
-                  title="Производството е започнало"
-                  detail="Потвърдена версия за екипа"
+                  title="Клиентът е одобрил"
+                  detail="Решението е заключено"
                 />
                 <StoryStatus
                   progress={smoothProgress}
                   threshold={0.83}
                   icon={Wrench}
-                  title="Монтаж и гаранция"
-                  detail="Пълна следа след предаването"
+                  title="Работата е изпълнена"
+                  detail="Пълна следа към промяната"
                 />
               </div>
             </motion.div>
@@ -353,7 +349,7 @@ function FlowStory() {
   );
 }
 
-export function LandingExperience() {
+export function LandingExperience({ signedIn = false }: { signedIn?: boolean }) {
   const reduceMotion = useReducedMotion();
   const { scrollYProgress } = useScroll();
   const pageProgress = useSpring(scrollYProgress, {
@@ -376,9 +372,13 @@ export function LandingExperience() {
           className="group flex items-center gap-2.5"
           aria-label="MadeFlow"
         >
-          <span className="grid size-9 place-items-center rounded-full bg-[#ff765f] text-sm font-black transition-transform group-hover:rotate-12">
-            M
-          </span>
+          <Image
+            src="/madeflow-mark.svg"
+            alt=""
+            width={36}
+            height={36}
+            className="size-9 transition-transform group-hover:-rotate-6"
+          />
           <span className="text-[15px] font-black tracking-[-0.04em]">
             MadeFlow<sup className="ml-0.5 text-[6px]">®</sup>
           </span>
@@ -392,18 +392,30 @@ export function LandingExperience() {
           <a href="#beta">БЕТА</a>
         </nav>
         <div className="flex items-center gap-2">
-          <Link
-            href="/sign-in"
-            className="hidden px-3 py-2 text-xs font-bold sm:block"
-          >
-            ВХОД
-          </Link>
-          <Link
-            href="/sign-up"
-            className="flex items-center gap-2 border border-[#102b38]/50 bg-[#f4efe4]/70 px-3.5 py-2.5 font-mono text-[9px] font-bold tracking-[0.09em] backdrop-blur-md transition-colors hover:bg-[#ff765f]"
-          >
-            ЗАПОЧНИ <ArrowUpRight className="size-3.5" />
-          </Link>
+          {signedIn ? (
+            <Link
+              href="/app"
+              prefetch={true}
+              className="flex items-center gap-2 border border-[#102b38]/50 bg-[#ff765f] px-3.5 py-2.5 font-mono text-[9px] font-bold tracking-[0.09em] text-[#102b38]"
+            >
+              КЪМ ОБЕКТИТЕ <ArrowUpRight className="size-3.5" />
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/sign-in"
+                className="hidden px-3 py-2 text-xs font-bold sm:block"
+              >
+                ВХОД
+              </Link>
+              <Link
+                href="/sign-up"
+                className="flex items-center gap-2 border border-[#102b38]/50 bg-[#f4efe4]/70 px-3.5 py-2.5 font-mono text-[9px] font-bold tracking-[0.09em] backdrop-blur-md transition-colors hover:bg-[#ff765f]"
+              >
+                ЗАПОЧНИ <ArrowUpRight className="size-3.5" />
+              </Link>
+            </>
+          )}
         </div>
       </header>
 
@@ -411,7 +423,7 @@ export function LandingExperience() {
         <div className="mf-hero-grid absolute inset-0" />
         <motion.div
           aria-hidden="true"
-          className="absolute -right-[8vw] top-[4vh] size-[44vw] min-h-[380px] min-w-[380px] rounded-full bg-[#a6d8df] blur-[2px]"
+          className="absolute top-[6vh] right-[2vw] size-[min(44vw,560px)] rounded-full bg-[#a6d8df] blur-[2px]"
           animate={reduceMotion ? undefined : { x: [0, 24, 0], y: [0, -18, 0] }}
           transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
         />
@@ -425,11 +437,11 @@ export function LandingExperience() {
         <div className="relative z-10 mx-auto max-w-[1500px]">
           <Reveal className="mf-kicker mb-7 flex items-center gap-3">
             <span className="size-2 rounded-full bg-[#ff765f]" />
-            ОПЕРАЦИОННА СИСТЕМА ЗА ПРОИЗВОДИТЕЛИ ПО ПОРЪЧКА
+            ПРОМЕНИТЕ ПО ОБЕКТА · ДОКУМЕНТИРАНИ И ОДОБРЕНИ
           </Reveal>
           <Reveal delay={0.06}>
             <h1 className="mf-hero-title">
-              ПОРЪЧКАТА
+              ПРОМЯНАТА
               <br />
               НЕ СЕ <i>губи.</i>
             </h1>
@@ -439,12 +451,17 @@ export function LandingExperience() {
             className="relative z-20 mt-9 max-w-[380px] lg:ml-[8vw]"
           >
             <p className="text-base leading-7 text-[#284955] sm:text-lg">
-              От първия размер до последния гаранционен ден — всяка версия,
-              решение и обещание остава на едно място.
+              От гласовата бележка на обекта до решението на клиента — всяка
+              версия, сума и обещание остава на едно място.
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
-              <Link href="/sign-up" className="mf-primary-button">
-                СЪЗДАЙ WORKSPACE <ArrowRight className="size-4" />
+              <Link
+                href={signedIn ? "/app" : "/sign-up"}
+                prefetch={signedIn}
+                className="mf-primary-button"
+              >
+                {signedIn ? "КЪМ ОБЕКТИТЕ" : "СЪЗДАЙ WORKSPACE"}{" "}
+                <ArrowRight className="size-4" />
               </Link>
               <a
                 href="#workflow"
@@ -472,10 +489,10 @@ export function LandingExperience() {
               <div className="flex items-start justify-between border-b border-[#102b38]/10 pb-5">
                 <div>
                   <p className="font-mono text-[9px] font-bold tracking-[0.15em] text-[#e86650]">
-                    MF-000128 / LIVE
+                    MF-000042 / LIVE
                   </p>
                   <h2 className="mt-2 text-2xl font-black tracking-[-0.05em]">
-                    Кухня · кв. Лозенец
+                    Къща · кв. Бояна
                   </h2>
                 </div>
                 <span className="rounded-full bg-[#fee8a5] px-3 py-1.5 text-[10px] font-bold text-[#73570d]">
@@ -486,23 +503,23 @@ export function LandingExperience() {
                 <div className="rounded-2xl bg-[#dceeea] p-5">
                   <p className="mf-card-label">ПОСЛЕДНА ПРОМЯНА</p>
                   <p className="mt-10 text-lg font-black leading-tight tracking-[-0.04em]">
-                    Плотът е сменен с компактен ламинат.
+                    Двата контакта се местят с 40 см.
                   </p>
                   <p className="mt-3 font-mono text-[10px] text-[#53706f]">
-                    + 320 € · ПРЕДИ 8 МИН.
+                    + 384 € · ПРЕДИ 8 МИН.
                   </p>
                 </div>
                 <div className="space-y-3">
                   <div className="rounded-2xl bg-[#ff8069] p-4">
                     <p className="mf-card-label">ВЕРСИЯ</p>
                     <p className="mt-6 text-4xl font-black tracking-[-0.08em]">
-                      v3
+                      v2
                     </p>
                   </div>
                   <div className="rounded-2xl bg-[#bceba8] p-4">
                     <p className="mf-card-label">СТОЙНОСТ</p>
                     <p className="mt-5 text-xl font-black tracking-[-0.05em]">
-                      12 480 €
+                      +384 €
                     </p>
                   </div>
                 </div>
@@ -510,24 +527,21 @@ export function LandingExperience() {
             </div>
           </motion.div>
 
-          <div className="pointer-events-none absolute right-[-4vw] top-[18vh] select-none text-[31vw] font-black leading-none tracking-[-0.15em] text-white/25">
-            MF
-          </div>
         </div>
 
         <div className="absolute bottom-8 right-[5vw] z-20 hidden items-center gap-3 font-mono text-[8px] tracking-[0.14em] lg:flex">
-          <span>СПЕЦИФИКАЦИЯ</span>
+          <span>ДОКУМЕНТИРАНЕ</span>
           <i className="size-1.5 rounded-full bg-[#ff765f]" />
           <span>ОДОБРЕНИЕ</span>
           <i className="size-1.5 rounded-full bg-[#ff765f]" />
-          <span>СЕРВИЗ</span>
+          <span>ИЗПЪЛНЕНИЕ</span>
         </div>
       </section>
 
       <section className="grid bg-[#ff765f] px-[6vw] py-8 sm:grid-cols-3">
         {[
           ["1", "жива версия"],
-          ["30 дни", "валиден клиентски линк"],
+          ["1 линк", "без клиентски профил"],
           ["100%", "проследима история"],
         ].map(([value, label]) => (
           <div
@@ -560,9 +574,8 @@ export function LandingExperience() {
                 ПОВЕЧЕ <i>яснота.</i>
               </h2>
               <p className="mt-8 max-w-xl text-base leading-7 text-[#49626b]">
-                MadeFlow подрежда най-рисковите моменти в поръчковото
-                производство, без да променя начина, по който майсторите вършат
-                добрата работа.
+                MadeFlow подрежда най-рисковия разговор в строителството —
+                промяната след началото — без да забавя работата на обекта.
               </p>
             </div>
           </Reveal>
@@ -628,9 +641,13 @@ export function LandingExperience() {
               <div className="rounded-[26px] bg-[#fffaf0] p-6 sm:p-8">
                 <div className="flex items-center justify-between border-b border-[#102b38]/10 pb-5">
                   <div className="flex items-center gap-2 font-black">
-                    <span className="grid size-8 place-items-center rounded-full bg-[#ff765f] text-xs">
-                      M
-                    </span>
+                    <Image
+                      src="/madeflow-mark.svg"
+                      alt=""
+                      width={32}
+                      height={32}
+                      className="size-8"
+                    />
                     MadeFlow
                   </div>
                   <span className="font-mono text-[8px] tracking-[0.14em] text-[#66808a]">
@@ -645,11 +662,11 @@ export function LandingExperience() {
                     ВЕРСИЯ 3
                   </p>
                   <h3 className="mt-2 text-2xl font-black tracking-[-0.05em] sm:text-3xl">
-                    Кухня · кв. Лозенец
+                    Къща · кв. Бояна
                   </h3>
                   <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-[#5f747c]">
-                    Прегледайте финалната спецификация и потвърдете, че можем да
-                    започнем изработката.
+                    Прегледайте промяната, крайната цена и отражението върху
+                    срока преди да вземете решение.
                   </p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -681,15 +698,20 @@ export function LandingExperience() {
             <h2 className="mf-cta-title mt-8">
               ДАЙ НА ВСЯКА
               <br />
-              ПОРЪЧКА <i>памет.</i>
+              ПРОМЯНА <i>памет.</i>
             </h2>
             <div className="mt-12 flex flex-col gap-6 border-t border-[#102b38]/35 pt-7 sm:flex-row sm:items-center sm:justify-between">
               <p className="max-w-lg text-base leading-7">
-                Създай workspace и започни с реална поръчка още днес. Плащанията
-                в бета версията се записват ръчно.
+                Създай workspace и документирай първата реална промяна още днес.
+                Клиентът одобрява директно през защитен линк.
               </p>
-              <Link href="/sign-up" className="mf-dark-button">
-                ЗАПОЧНИ БЕЗПЛАТНО <ArrowUpRight className="size-4" />
+              <Link
+                href={signedIn ? "/app" : "/sign-up"}
+                prefetch={signedIn}
+                className="mf-dark-button"
+              >
+                {signedIn ? "КЪМ ОБЕКТИТЕ" : "ЗАПОЧНИ БЕЗПЛАТНО"}{" "}
+                <ArrowUpRight className="size-4" />
               </Link>
             </div>
           </Reveal>
@@ -703,7 +725,7 @@ export function LandingExperience() {
         <div className="flex flex-wrap gap-x-8 gap-y-2 font-mono text-[8px] tracking-[0.14em] text-[#9db5b6]">
           <span>© 2026 MADEFLOW</span>
           <span>SOFIA · BULGARIA · EU</span>
-          <span>СЪЗДАДЕНО ЗА ДОБРАТА ИЗРАБОТКА</span>
+          <span>СЪЗДАДЕНО ЗА ЯСНИ ПРОМЕНИ</span>
         </div>
       </footer>
     </main>

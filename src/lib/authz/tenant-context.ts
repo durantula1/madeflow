@@ -12,7 +12,7 @@ export type TenantContext = {
   organizationId: string;
   organizationName: string;
   organizationSlug: string;
-  role: "owner" | "admin" | "member";
+  role: "owner" | "admin" | "member" | "field" | "office";
 };
 
 export class AuthenticationRequiredError extends Error {

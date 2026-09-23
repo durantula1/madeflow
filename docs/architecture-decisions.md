@@ -1,58 +1,42 @@
 # MadeFlow architecture decisions
 
-Status: accepted for beta implementation, 2026-08-15.
+Status: accepted for demo implementation, 2026-09-22.
 
 ## Product boundary
 
-- MadeFlow is a digital passport and approval workflow for made-to-order products.
-- The beta is a complete working product without Stripe or paid subscriptions.
-- The first vertical is custom furniture and kitchens.
-- Bulgarian is the launch language; copy lives in structured dictionaries.
-- The browser application is responsive and installable, but offline workflows are out of scope.
+- MadeFlow решава един проблем: навременно документиране и одобряване на
+  допълнителна работа.
+- България е първият пазар; един designated approver е достатъчен за демото.
+- Одобрението е click approval с typed name и audit trail, без претенция за QES.
+- Ценообразуването е fixed price, credit, no-cost или schedule-only.
+- Изпращането е manual copy-link; AI остава незадължителен ускорител.
 
 ## Application shape
 
-- One Next.js 16 modular monolith using App Router and Node.js runtime.
-- Server Components perform reads; Server Actions perform authenticated UI mutations.
-- Route Handlers are reserved for public approval, storage signing/finalization, auth callbacks, exports, and provider callbacks.
-- Business modules own validation, authorization, domain transitions, and persistence.
+- Next.js App Router и Node.js runtime.
+- Server Components четат през domain query modules.
+- Server Actions обработват staff и portal mutations.
+- `/access/[token]` обменя bootstrap secret за scoped device session.
+- Portal browser-ът никога не използва Supabase client за business data.
 
-## Supabase boundary
+## Data and immutability
 
-- Supabase provides Auth, PostgreSQL, and private Storage.
-- `@supabase/ssr` owns cookie-based Auth sessions.
-- Drizzle and `postgres.js` own business-table access from trusted server code.
-- Business tables live in the non-exposed `app` schema.
-- Browser code never queries business tables directly.
-- Runtime uses a transaction-pooler connection with prepared statements disabled; migrations use a direct connection.
+- `projects` съдържа обектите и client contacts.
+- `change_orders` е стабилната business identity; съдържанието живее във
+  versioned `change_order_revisions`.
+- След `sent` content колоните, frozen timestamp и hash са immutable.
+- `portal_decisions` и `timeline_events` са append-only.
+- Commercial decision и work status са отделни state machines.
 
-## Tenant boundary
+## Access model
 
-- Every business entity has a non-null `organization_id`.
-- Every server operation derives tenant context from a verified Supabase identity and active membership.
-- Client-provided organization IDs are never trusted.
-- Repository queries require an organization ID and enforce it in SQL.
-- Composite constraints prevent cross-tenant references where practical.
+- Staff identity идва от Supabase Auth и active organization membership.
+- Portal contact не е `auth.users` и няма login.
+- Bootstrap grants и device sessions имат отделни hashes, expiry и revocation.
+- Data API ролите нямат grants върху business таблиците; trusted server code
+  връща allow-listed DTO-та.
 
-## Version and approval model
+## Transitional boundary
 
-- Drafts are mutable rows in `order_drafts`, not specification versions.
-- Published versions use `published`, `awaiting_approval`, `approved`, or `superseded`.
-- A request for changes is an append-only `review_request`; it does not mutate version content.
-- The canonical hash covers specification, commercial terms, promised date, and the immutable file manifest.
-- Approval is idempotent and atomically switches the order's current production version.
-- Published snapshot payloads and version-file manifests are protected by database triggers.
-
-## Reliability
-
-- Domain state commits before email delivery.
-- Transactional email is recorded in an outbox with retries and idempotency keys.
-- Public tokens contain at least 32 random bytes; only SHA-256 hashes are stored.
-- Order numbers are allocated transactionally per organization.
-
-## UI foundation
-
-- shadcn 4 with one React Aria component base.
-- MadeFlow-specific OKLCH tokens, typography, and components replace preset visuals.
-- Three.js is isolated to dynamically loaded marketing islands and is never imported by workspace routes.
-
+Legacy MadeFlow таблиците и routes са запазени временно за миграция и rollback.
+Новата навигация и продуктови потоци използват само MadeFlow модулите.

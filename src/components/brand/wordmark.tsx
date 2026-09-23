@@ -1,6 +1,39 @@
+import Image from "next/image";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-export function Wordmark({ inverse = false, className }: { inverse?: boolean; className?: string }) {
-  return <Link href="/" className={cn("inline-flex items-center gap-2", className)}><span className={cn("grid size-8 place-items-center rounded-xl text-sm font-black shadow-sm", inverse ? "bg-[#8ac99a] text-[#183423]" : "bg-primary text-primary-foreground")}>M</span><span className={cn("text-lg font-semibold tracking-tight", inverse && "text-white")}>MadeFlow</span></Link>;
+export function Wordmark({
+  inverse = false,
+  className,
+  href,
+}: {
+  inverse?: boolean;
+  className?: string;
+  href?: string;
+}) {
+  return (
+    <Link
+      href={href ?? (inverse ? "/app" : "/")}
+      className={cn("inline-flex items-center gap-2.5", className)}
+    >
+      <Image
+        src="/madeflow-mark.svg"
+        alt=""
+        width={36}
+        height={36}
+        className="size-9 shrink-0"
+      />
+      <span
+        className={cn(
+          "text-[19px] font-extrabold tracking-[-0.05em]",
+          inverse ? "text-[#fffaf0]" : "text-[#102b38]",
+        )}
+      >
+        Made
+        <span className={inverse ? "text-[#bceba8]" : "text-[#e86650]"}>
+          Flow
+        </span>
+      </span>
+    </Link>
+  );
 }

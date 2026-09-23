@@ -5,6 +5,7 @@ import {
   date,
   foreignKey,
   index,
+  inet,
   integer,
   jsonb,
   numeric,
@@ -24,6 +25,8 @@ export const memberRole = appSchema.enum("member_role", [
   "owner",
   "admin",
   "member",
+  "field",
+  "office",
 ]);
 export const memberStatus = appSchema.enum("member_status", [
   "active",
@@ -130,6 +133,7 @@ const timestamps = {
 export const profiles = appSchema.table("profiles", {
   id: uuid("id").primaryKey(),
   displayName: text("display_name").notNull(),
+  email: text("email"),
   phone: text("phone"),
   ...timestamps,
 });
@@ -150,6 +154,14 @@ export const organizations = appSchema.table(
     nextOrderNumber: bigint("next_order_number", { mode: "number" })
       .notNull()
       .default(1),
+    defaultTaxRate: numeric("default_tax_rate", { precision: 5, scale: 2 })
+      .notNull()
+      .default("20.00"),
+    portalSessionDays: integer("portal_session_days").notNull().default(30),
+    stepUpThreshold: numeric("step_up_threshold", {
+      precision: 14,
+      scale: 2,
+    }),
     ...timestamps,
   },
   (table) => [uniqueIndex("organizations_slug_uidx").on(table.slug)],
@@ -164,6 +176,7 @@ export const organizationMembers = appSchema.table(
     userId: uuid("user_id").notNull(),
     role: memberRole("role").notNull(),
     status: memberStatus("status").notNull().default("active"),
+    canRecordPayments: boolean("can_record_payments").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -785,4 +798,564 @@ export const notificationOutbox = appSchema.table(
       table.availableAt,
     ),
   ],
+);
+
+// Change-order domain. The previous passport tables intentionally remain
+// available for data migration, but the application reads and writes these tables.
+export const projectStatus = appSchema.enum("project_status", [
+  "active",
+  "completed",
+  "archived",
+]);
+export const projectPermission = appSchema.enum("project_permission", [
+  "view",
+  "draft",
+  "send",
+  "manage",
+]);
+export const portalContactRole = appSchema.enum("portal_contact_role", [
+  "viewer",
+  "approver",
+]);
+export const changeLifecycleStatus = appSchema.enum("change_lifecycle_status", [
+  "draft",
+  "open",
+  "resolved",
+  "canceled",
+]);
+export const changeWorkStatus = appSchema.enum("change_work_status", [
+  "not_started",
+  "scheduled",
+  "in_progress",
+  "completed",
+  "invoiced",
+  "paid",
+]);
+export const changeRevisionStatus = appSchema.enum("change_revision_status", [
+  "draft",
+  "sent",
+  "viewed",
+  "approved",
+  "declined",
+  "changes_requested",
+  "canceled",
+  "expired",
+  "superseded",
+]);
+export const changeKind = appSchema.enum("change_kind", [
+  "addition",
+  "credit",
+  "no_cost",
+  "schedule_only",
+]);
+export const documentKind = appSchema.enum("document_kind", [
+  "offer",
+  "change",
+]);
+export const scheduleImpactType = appSchema.enum("schedule_impact_type", [
+  "none",
+  "days",
+  "unknown",
+]);
+export const changeDecision = appSchema.enum("change_decision", [
+  "approved",
+  "declined",
+  "changes_requested",
+]);
+export const timelineActorType = appSchema.enum("timeline_actor_type", [
+  "staff",
+  "portal_contact",
+  "system",
+  "ai",
+]);
+export const timelineVisibility = appSchema.enum("timeline_visibility", [
+  "internal",
+  "client",
+]);
+export const attachmentKind = appSchema.enum("attachment_kind", [
+  "image",
+  "audio",
+  "document",
+]);
+export const attachmentVisibility = appSchema.enum("attachment_visibility", [
+  "internal",
+  "client",
+]);
+
+export const projects = appSchema.table(
+  "projects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    publicId: uuid("public_id").notNull().defaultRandom(),
+    name: text("name").notNull(),
+    siteAddress: text("site_address").notNull(),
+    reference: text("reference"),
+    status: projectStatus("status").notNull().default("active"),
+    createdBy: uuid("created_by").notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("projects_public_id_uidx").on(table.publicId),
+    index("projects_org_status_updated_idx").on(
+      table.organizationId,
+      table.status,
+      table.updatedAt,
+    ),
+  ],
+);
+
+export const projectMembers = appSchema.table(
+  "project_members",
+  {
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull(),
+    permission: projectPermission("permission").notNull().default("view"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.projectId, table.userId] }),
+    index("project_members_user_idx").on(table.userId, table.projectId),
+  ],
+);
+
+export const projectContacts = appSchema.table(
+  "project_contacts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    email: text("email"),
+    phone: text("phone"),
+    portalRole: portalContactRole("portal_role").notNull().default("approver"),
+    isPrimary: boolean("is_primary").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("project_contacts_project_idx").on(table.projectId)],
+);
+
+export const portalGrants = appSchema.table(
+  "portal_grants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectContactId: uuid("project_contact_id")
+      .notNull()
+      .references(() => projectContacts.id, { onDelete: "restrict" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    tokenCiphertext: text("token_ciphertext"),
+    scope: text("scope").array().notNull().default(["view", "decide"]),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdBy: uuid("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lastExchangedAt: timestamp("last_exchanged_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("portal_grants_token_hash_uidx").on(table.tokenHash),
+    index("portal_grants_project_contact_idx").on(
+      table.projectId,
+      table.projectContactId,
+    ),
+  ],
+);
+
+export const portalSessions = appSchema.table(
+  "portal_sessions",
+  {
+    id: bigint("id", { mode: "number" })
+      .primaryKey()
+      .generatedAlwaysAsIdentity(),
+    portalGrantId: uuid("portal_grant_id")
+      .notNull()
+      .references(() => portalGrants.id, { onDelete: "cascade" }),
+    sessionHash: text("session_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdIp: inet("created_ip"),
+    userAgent: text("user_agent"),
+  },
+  (table) => [
+    uniqueIndex("portal_sessions_session_hash_uidx").on(table.sessionHash),
+    index("portal_sessions_grant_idx").on(table.portalGrantId),
+  ],
+);
+
+export const changeOrders = appSchema.table(
+  "change_orders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "restrict" }),
+    sequenceNumber: bigint("sequence_number", { mode: "number" }).notNull(),
+    documentKind: documentKind("document_kind").notNull().default("change"),
+    baselineOfferId: uuid("baseline_offer_id"),
+    currentRevisionId: bigint("current_revision_id", { mode: "number" }),
+    lifecycleStatus: changeLifecycleStatus("lifecycle_status")
+      .notNull()
+      .default("draft"),
+    workStatus: changeWorkStatus("work_status")
+      .notNull()
+      .default("not_started"),
+    createdBy: uuid("created_by").notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("change_orders_project_kind_sequence_uidx").on(
+      table.projectId,
+      table.documentKind,
+      table.sequenceNumber,
+    ),
+    index("change_orders_baseline_idx").on(table.baselineOfferId),
+    foreignKey({
+      columns: [table.baselineOfferId],
+      foreignColumns: [table.id],
+      name: "change_orders_baseline_offer_id_change_orders_id_fk",
+    }).onDelete("restrict"),
+    index("change_orders_project_status_updated_idx").on(
+      table.projectId,
+      table.lifecycleStatus,
+      table.updatedAt,
+    ),
+    index("change_orders_org_idx").on(table.organizationId),
+  ],
+);
+
+export const changeOrderRevisions = appSchema.table(
+  "change_order_revisions",
+  {
+    id: bigint("id", { mode: "number" })
+      .primaryKey()
+      .generatedAlwaysAsIdentity(),
+    changeOrderId: uuid("change_order_id")
+      .notNull()
+      .references(() => changeOrders.id, { onDelete: "restrict" }),
+    revisionNumber: integer("revision_number").notNull(),
+    status: changeRevisionStatus("status").notNull().default("draft"),
+    title: text("title").notNull(),
+    description: text("description").notNull(),
+    reason: text("reason"),
+    changeKind: changeKind("change_kind").notNull().default("addition"),
+    pricingType: text("pricing_type").notNull().default("fixed"),
+    currency: char("currency", { length: 3 }).notNull(),
+    subtotal: numeric("subtotal", { precision: 14, scale: 2 }).notNull(),
+    taxRate: numeric("tax_rate", { precision: 5, scale: 2 })
+      .notNull()
+      .default("0"),
+    taxAmount: numeric("tax_amount", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0"),
+    total: numeric("total", { precision: 14, scale: 2 }).notNull(),
+    scheduleImpactType: scheduleImpactType("schedule_impact_type")
+      .notNull()
+      .default("none"),
+    scheduleImpactDays: integer("schedule_impact_days"),
+    agreedDeadline: date("agreed_deadline"),
+    responseDueAt: timestamp("response_due_at", { withTimezone: true }),
+    clientNote: text("client_note"),
+    internalNote: text("internal_note"),
+    frozenAt: timestamp("frozen_at", { withTimezone: true }),
+    contentHash: text("content_hash"),
+    createdBy: uuid("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("change_revisions_order_number_uidx").on(
+      table.changeOrderId,
+      table.revisionNumber,
+    ),
+    index("change_revisions_order_status_idx").on(
+      table.changeOrderId,
+      table.status,
+    ),
+  ],
+);
+
+export const changeOrderLineItems = appSchema.table(
+  "change_order_line_items",
+  {
+    id: bigint("id", { mode: "number" })
+      .primaryKey()
+      .generatedAlwaysAsIdentity(),
+    revisionId: bigint("revision_id", { mode: "number" })
+      .notNull()
+      .references(() => changeOrderRevisions.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    description: text("description").notNull(),
+    quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull(),
+    unit: text("unit"),
+    unitPrice: numeric("unit_price", { precision: 14, scale: 2 }).notNull(),
+    lineTotal: numeric("line_total", { precision: 14, scale: 2 }).notNull(),
+  },
+  (table) => [index("change_line_items_revision_idx").on(table.revisionId)],
+);
+
+export const changeAttachments = appSchema.table(
+  "change_attachments",
+  {
+    id: bigint("id", { mode: "number" })
+      .primaryKey()
+      .generatedAlwaysAsIdentity(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "restrict" }),
+    revisionId: bigint("revision_id", { mode: "number" }).references(
+      () => changeOrderRevisions.id,
+      { onDelete: "restrict" },
+    ),
+    storagePath: text("storage_path").notNull(),
+    kind: attachmentKind("kind").notNull(),
+    mimeType: text("mime_type").notNull(),
+    byteSize: bigint("byte_size", { mode: "number" }).notNull(),
+    sha256: text("sha256").notNull(),
+    visibility: attachmentVisibility("visibility").notNull().default("client"),
+    processingStatus: text("processing_status").notNull().default("ready"),
+    createdBy: uuid("created_by"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("change_attachments_storage_path_uidx").on(table.storagePath),
+    index("change_attachments_revision_idx").on(table.revisionId),
+    index("change_attachments_project_idx").on(table.projectId),
+  ],
+);
+
+export const portalDecisions = appSchema.table(
+  "portal_decisions",
+  {
+    id: bigint("id", { mode: "number" })
+      .primaryKey()
+      .generatedAlwaysAsIdentity(),
+    revisionId: bigint("revision_id", { mode: "number" })
+      .notNull()
+      .references(() => changeOrderRevisions.id, { onDelete: "restrict" }),
+    projectContactId: uuid("project_contact_id")
+      .notNull()
+      .references(() => projectContacts.id, { onDelete: "restrict" }),
+    portalSessionId: bigint("portal_session_id", { mode: "number" })
+      .notNull()
+      .references(() => portalSessions.id, { onDelete: "restrict" }),
+    decision: changeDecision("decision").notNull(),
+    comment: text("comment"),
+    typedName: text("typed_name").notNull(),
+    consentTextVersion: text("consent_text_version").notNull(),
+    revisionContentHash: text("revision_content_hash").notNull(),
+    idempotencyKey: uuid("idempotency_key").notNull(),
+    ip: inet("ip"),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("portal_decisions_idempotency_uidx").on(table.idempotencyKey),
+    uniqueIndex("portal_decisions_revision_uidx").on(table.revisionId),
+    index("portal_decisions_contact_idx").on(table.projectContactId),
+    index("portal_decisions_session_idx").on(table.portalSessionId),
+  ],
+);
+
+export const timelineEvents = appSchema.table(
+  "timeline_events",
+  {
+    id: bigint("id", { mode: "number" })
+      .primaryKey()
+      .generatedAlwaysAsIdentity(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "restrict" }),
+    changeOrderId: uuid("change_order_id").references(() => changeOrders.id, {
+      onDelete: "restrict",
+    }),
+    revisionId: bigint("revision_id", { mode: "number" }).references(
+      () => changeOrderRevisions.id,
+      { onDelete: "restrict" },
+    ),
+    actorType: timelineActorType("actor_type").notNull(),
+    actorId: text("actor_id"),
+    eventType: text("event_type").notNull(),
+    visibility: timelineVisibility("visibility").notNull().default("internal"),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("timeline_project_cursor_idx").on(
+      table.projectId,
+      table.createdAt,
+      table.id,
+    ),
+    index("timeline_change_idx").on(table.changeOrderId),
+    index("timeline_revision_idx").on(table.revisionId),
+  ],
+);
+
+export const teamInvites = appSchema.table(
+  "team_invites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    email: text("email").notNull(),
+    role: memberRole("role").notNull(),
+    canRecordPayments: boolean("can_record_payments").notNull().default(false),
+    projectIds: uuid("project_ids").array().notNull().default([]),
+    tokenHash: text("token_hash").notNull(),
+    createdBy: uuid("created_by").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("team_invites_token_hash_uidx").on(table.tokenHash),
+    index("team_invites_org_email_idx").on(table.organizationId, table.email),
+  ],
+);
+
+export const ownerRoleRequests = appSchema.table(
+  "owner_role_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    targetUserId: uuid("target_user_id").notNull(),
+    requestedRole: memberRole("requested_role"),
+    removeMember: boolean("remove_member").notNull().default(false),
+    requestedBy: uuid("requested_by").notNull(),
+    approvedBy: uuid("approved_by"),
+    status: text("status").notNull().default("pending"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (table) => [index("owner_role_requests_org_status_idx").on(table.organizationId, table.status)],
+);
+
+export const staffNotifications = appSchema.table(
+  "staff_notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    userId: uuid("user_id").notNull(),
+    projectId: uuid("project_id").references(() => projects.id),
+    eventType: text("event_type").notNull(),
+    title: text("title").notNull(),
+    body: text("body"),
+    href: text("href"),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("staff_notifications_user_idx").on(table.userId, table.createdAt)],
+);
+
+export const projectMilestones = appSchema.table(
+  "project_milestones",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    projectId: uuid("project_id").notNull().references(() => projects.id),
+    changeOrderId: uuid("change_order_id").references(() => changeOrders.id),
+    title: text("title").notNull(),
+    dueOn: date("due_on").notNull(),
+    status: text("status").notNull().default("planned"),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdBy: uuid("created_by").notNull(),
+    ...timestamps,
+  },
+  (table) => [index("project_milestones_project_due_idx").on(table.projectId, table.dueOn)],
+);
+
+export const paymentInstallments = appSchema.table(
+  "payment_installments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    projectId: uuid("project_id").notNull().references(() => projects.id),
+    milestoneId: uuid("milestone_id").references(() => projectMilestones.id),
+    kind: paymentKind("kind").notNull(),
+    title: text("title").notNull(),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    currency: char("currency", { length: 3 }).notNull(),
+    dueOn: date("due_on").notNull(),
+    createdBy: uuid("created_by").notNull(),
+    ...timestamps,
+  },
+  (table) => [index("payment_installments_project_due_idx").on(table.projectId, table.dueOn)],
+);
+
+export const projectReceipts = appSchema.table(
+  "project_receipts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    projectId: uuid("project_id").notNull().references(() => projects.id),
+    installmentId: uuid("installment_id").references(() => paymentInstallments.id),
+    correctionOfId: uuid("correction_of_id"),
+    kind: paymentKind("kind").notNull(),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    currency: char("currency", { length: 3 }).notNull(),
+    method: text("method").notNull(),
+    receivedOn: date("received_on").notNull(),
+    note: text("note"),
+    createdBy: uuid("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("project_receipts_org_date_idx").on(table.organizationId, table.receivedOn), index("project_receipts_project_date_idx").on(table.projectId, table.receivedOn)],
+);
+
+export const paymentDisputes = appSchema.table(
+  "payment_disputes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    projectId: uuid("project_id").notNull().references(() => projects.id),
+    receiptId: uuid("receipt_id").notNull().references(() => projectReceipts.id),
+    projectContactId: uuid("project_contact_id").notNull().references(() => projectContacts.id),
+    reason: text("reason").notNull(),
+    status: text("status").notNull().default("open"),
+    resolution: text("resolution"),
+    resolvedBy: uuid("resolved_by"),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("payment_disputes_project_status_idx").on(table.projectId, table.status)],
 );

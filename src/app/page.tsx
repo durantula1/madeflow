@@ -1,15 +1,14 @@
-import type { Metadata } from "next";
-
-import { LandingExperience } from "@/components/marketing/landing-experience";
+import { cookies } from "next/headers";
 
 import "./marketing.css";
 
-export const metadata: Metadata = {
-  title: "MadeFlow — всяка поръчка има памет",
-  description:
-    "Красив и ясен работен поток за спецификации, версии, клиентско одобрение, производство, монтаж и сервиз.",
-};
+import { LandingExperience } from "@/components/marketing/landing-experience";
 
-export default function HomePage() {
-  return <LandingExperience />;
+export default async function HomePage() {
+  const jar = await cookies();
+  const signedIn = jar
+    .getAll()
+    .some((cookie) => cookie.name.includes("-auth-token") && cookie.value.length > 0);
+
+  return <LandingExperience signedIn={signedIn} />;
 }

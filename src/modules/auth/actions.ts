@@ -31,7 +31,8 @@ export async function signInAction(
     return { error: "Имейлът или паролата не са правилни." };
   }
 
-  redirect("/app");
+  const next = formData.get("next");
+  redirect(typeof next === "string" && /^\/join\/[A-Za-z0-9._-]+$/.test(next) ? next : "/app");
 }
 
 export async function signUpAction(
@@ -47,11 +48,13 @@ export async function signUpAction(
 
   const { NEXT_PUBLIC_APP_URL } = getPublicEnvironment();
   const supabase = await createClient();
-  const { error } = await supabase.auth.signUp({
+  const next = formData.get("next");
+  const safeNext = typeof next === "string" && /^\/join\/[A-Za-z0-9._-]+$/.test(next) ? next : "/app";
+  const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
     options: {
-      emailRedirectTo: `${NEXT_PUBLIC_APP_URL}/auth/callback`,
+      emailRedirectTo: `${NEXT_PUBLIC_APP_URL}/auth/callback?next=${encodeURIComponent(safeNext)}`,
       data: { display_name: parsed.data.displayName },
     },
   });
@@ -59,6 +62,8 @@ export async function signUpAction(
   if (error) {
     return { error: "Регистрацията не беше завършена. Опитай отново." };
   }
+
+  if (data.session) redirect(safeNext);
 
   return {
     message: "Провери имейла си, за да потвърдиш регистрацията.",

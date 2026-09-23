@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="none" role="img" aria-label="MadeFlow">
+  <rect x="5" y="8" width="63" height="55" rx="13" fill="#18394C" stroke="#9AAEB1" stroke-width="2.5"/>
+  <path d="M12 49V20h6l8 10 8-10h6v29h-7V32l-7 9-7-9v17h-7Z" fill="#FF765F"/>
+  <path d="M45 20h17v7H52v6h9v7h-9v9h-7V20Z" fill="#FFFAF0"/>
+  <circle cx="63" cy="58" r="12" fill="#BCEBA8" stroke="#18394C" stroke-width="3"/>
+  <path d="m57 58 4 4 8-9" stroke="#18394C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

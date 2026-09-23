@@ -1,8 +1,31 @@
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 
+function nextWithPath(request: NextRequest, pathname: string) {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", pathname);
+  return NextResponse.next({ request: { headers: requestHeaders } });
+}
+
 export async function proxy(request: NextRequest) {
-  let response = NextResponse.next({ request });
+  const pathname = request.nextUrl.pathname;
+  const isPrefetch =
+    request.headers.get("next-router-prefetch") === "1" ||
+    request.headers.get("next-router-segment-prefetch") === "1" ||
+    request.headers.get("purpose") === "prefetch";
+  const guardsSession =
+    pathname.startsWith("/app") ||
+    pathname.startsWith("/onboarding") ||
+    pathname === "/sign-in" ||
+    pathname === "/sign-up";
+
+  // Public routes and prefetches must not read the session. getClaims() can
+  // refresh or wipe auth cookies, and Next drops Set-Cookie on prefetch.
+  if (isPrefetch || !guardsSession) {
+    return nextWithPath(request, pathname);
+  }
+
+  let response = nextWithPath(request, pathname);
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
@@ -18,7 +41,7 @@ export async function proxy(request: NextRequest) {
           request.cookies.set(name, value);
         }
 
-        response = NextResponse.next({ request });
+        response = nextWithPath(request, pathname);
 
         for (const { name, value, options } of cookiesToSet) {
           response.cookies.set(name, value, options);
@@ -29,16 +52,23 @@ export async function proxy(request: NextRequest) {
 
   const { data } = await supabase.auth.getClaims();
   const claims = data?.claims;
-  const pathname = request.nextUrl.pathname;
 
-  if (pathname.startsWith("/app") && !claims) {
+  function redirectWithSession(url: URL) {
+    const redirectResponse = NextResponse.redirect(url);
+    for (const cookie of response.cookies.getAll()) {
+      redirectResponse.cookies.set(cookie);
+    }
+    return redirectResponse;
+  }
+
+  if ((pathname.startsWith("/app") || pathname.startsWith("/onboarding")) && !claims) {
     const loginUrl = new URL("/sign-in", request.url);
     loginUrl.searchParams.set("next", pathname);
-    return NextResponse.redirect(loginUrl);
+    return redirectWithSession(loginUrl);
   }
 
   if ((pathname === "/sign-in" || pathname === "/sign-up") && claims) {
-    return NextResponse.redirect(new URL("/app", request.url));
+    return redirectWithSession(new URL("/app", request.url));
   }
 
   return response;

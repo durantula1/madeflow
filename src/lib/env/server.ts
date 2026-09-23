@@ -25,4 +25,3 @@ export function getServerEnvironment(): ServerEnvironment {
 
   return cachedEnvironment;
 }
-

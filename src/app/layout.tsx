@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Toaster } from "sonner";
+import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -7,16 +7,16 @@ export const metadata: Metadata = {
     process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
   ),
   title: {
-    default: "MadeFlow — от спецификация до сервиз",
+    default: "MadeFlow — допълнителната работа, договорена навреме",
     template: "%s · MadeFlow",
   },
   description:
-    "Единно място за спецификации, оферти, клиентско одобрение, монтаж и гаранции за производители по поръчка.",
+    "Документирай промяната на обекта за под минута и получи ясно клиентско одобрение без регистрация.",
   applicationName: "MadeFlow",
   manifest: "/manifest.webmanifest",
   openGraph: {
     title: "MadeFlow",
-    description: "Спокойният начин да управляваш всяка поръчка по изработка.",
+    description: "Допълнителната работа, договорена навреме.",
     locale: "bg_BG",
     type: "website",
   },
@@ -27,6 +27,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="bg"
       className="h-full antialiased"
+      data-scroll-behavior="smooth"
       suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col">
