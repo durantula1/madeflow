@@ -16,7 +16,7 @@ type DetailHeaderProps = {
 };
 
 const backClassName =
-  "inline-flex h-10 max-w-full shrink-0 items-center gap-2 self-start rounded-xl border bg-card px-3 text-sm font-medium text-foreground shadow-sm lg:max-w-56";
+  "inline-flex h-10 max-w-full shrink-0 items-center gap-2 self-start rounded-xl border bg-card px-3 text-sm font-medium text-foreground shadow-sm xl:max-w-56";
 
 export function DetailHeader({
   backHref,
@@ -36,7 +36,7 @@ export function DetailHeader({
   );
 
   return (
-    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:gap-4">
+    <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:gap-4">
       {backHref ? (
         <Link
           href={backHref}
@@ -49,7 +49,7 @@ export function DetailHeader({
           {backContent}
         </div>
       )}
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 xl:min-w-64">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           {loading ? (
             <div className="min-w-0">{title}</div>
@@ -65,7 +65,7 @@ export function DetailHeader({
         </div>
       </div>
       {action && (
-        <div className={`shrink-0 self-start ${actionClassName ?? ""}`}>
+        <div className={`min-w-0 self-start xl:max-w-sm xl:shrink-0 xl:[&>div]:justify-end ${actionClassName ?? ""}`}>
           {action}
         </div>
       )}

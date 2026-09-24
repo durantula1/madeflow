@@ -7,6 +7,8 @@ const statusLabels: Record<string, string> = {
   approved: "Одобрена",
   declined: "Отказана",
   changes_requested: "Иска промяна",
+  expired: "Изтекла",
+  superseded: "Заменена",
 };
 
 export function DocumentStatusBadge({ status }: { status: string | null }) {

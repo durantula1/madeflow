@@ -52,3 +52,21 @@ export async function updateOrganizationAction(formData: FormData) {
   await getDatabase().update(organizations).set({ name: name.data, updatedAt: new Date() }).where(eq(organizations.id, context.organizationId));
   revalidatePath("/app", "layout");
 }
+
+export async function updateDefaultTaxRateAction(formData: FormData) {
+  const rate = z.enum(["20", "9", "0"], { error: "Избери ставка." }).safeParse(formData.get("taxRate"));
+  if (!rate.success) return { error: rate.error.issues[0]?.message };
+  const context = await requireTenantContext();
+  requireRole(context, ["owner"]);
+  await getDatabase().update(organizations).set({ defaultTaxRate: Number(rate.data).toFixed(2), updatedAt: new Date() }).where(eq(organizations.id, context.organizationId));
+  revalidatePath("/app", "layout");
+}
+
+export async function updateOfferValidityAction(formData: FormData) {
+  const days = z.coerce.number().int("Въведи цял брой дни.").min(1, "Поне 1 ден.").max(180, "Най-много 180 дни.").safeParse(formData.get("offerValidityDays"));
+  if (!days.success) return { error: days.error.issues[0]?.message };
+  const context = await requireTenantContext();
+  requireRole(context, ["owner"]);
+  await getDatabase().update(organizations).set({ offerValidityDays: days.data, updatedAt: new Date() }).where(eq(organizations.id, context.organizationId));
+  revalidatePath("/app", "layout");
+}

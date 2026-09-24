@@ -15,6 +15,7 @@ import {
 import { getPortalSession } from "@/modules/change-portal/session";
 import { PAGE_SIZE, pageOffset } from "@/lib/pagination";
 import { getProjectState } from "@/modules/projects/state";
+import { summarizeRevisionDiff } from "@/modules/change-orders/revision-diff";
 
 const clientStatuses = [
   "sent",
@@ -50,6 +51,7 @@ const portalDocumentColumns = {
   scheduleImpactDays: changeOrderRevisions.scheduleImpactDays,
   agreedDeadline: changeOrderRevisions.agreedDeadline,
   clientNote: changeOrderRevisions.clientNote,
+  responseDueAt: changeOrderRevisions.responseDueAt,
   frozenAt: changeOrderRevisions.frozenAt,
   contentHash: changeOrderRevisions.contentHash,
   createdAt: changeOrderRevisions.createdAt,
@@ -145,6 +147,8 @@ export async function getPortalChange(
         status: changeOrderRevisions.status,
         title: changeOrderRevisions.title,
         total: changeOrderRevisions.total,
+        taxRate: changeOrderRevisions.taxRate,
+        agreedDeadline: changeOrderRevisions.agreedDeadline,
         currency: changeOrderRevisions.currency,
         frozenAt: changeOrderRevisions.frozenAt,
       })
@@ -184,5 +188,16 @@ export async function getPortalChange(
       .orderBy(asc(changeOrderLineItems.position)),
   ]);
 
-  return { project, session, change, revisions, events, decision, lineItems };
+  // A newer version the client has not decided on yet explains itself against the one they saw before.
+  const previous = ["sent", "viewed"].includes(change.status)
+    ? revisions.find((revision) => revision.frozenAt && revision.revisionNumber < change.revisionNumber)
+    : undefined;
+  const diff = previous
+    ? summarizeRevisionDiff(
+        { ...previous, lineItems: await getDatabase().select().from(changeOrderLineItems).where(eq(changeOrderLineItems.revisionId, previous.id)) },
+        { ...change, lineItems },
+      )
+    : null;
+
+  return { project, session, change, revisions, events, decision, lineItems, diff };
 }

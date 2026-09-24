@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
+  Compass,
   Bell,
   Building2,
   CirclePlus,
@@ -75,6 +76,8 @@ export default async function WorkspaceLayout({
           />
           {context.role === "owner" ? <NavLink href="/app/team" label="Екип" icon={<Users className="size-4" />} /> : null}
           {can(context, "finance.view") ? <NavLink href="/app/finance" label="Плащания" icon={<Euro className="size-4" />} /> : null}
+          <div className="my-3 border-t border-sidebar-border" />
+          <NavLink href="/app/guide" label="Как работи" icon={<Compass className="size-4" />} />
         </nav>
         <div className="mt-auto border-t border-sidebar-border pt-3">
           <UserMenu variant="sidebar" {...userMenu} />

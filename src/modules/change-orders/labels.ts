@@ -25,3 +25,18 @@ export function scheduleLabel(
   }
   return kind === "offer" ? "Без срок" : "Без промяна";
 }
+
+/** A 0% rate means the company does not charge VAT on this document. */
+export function vatLabel(taxRate: string | number) {
+  return Number(taxRate) ? `ДДС ${Number(taxRate)}%` : "Без ДДС";
+}
+
+export function totalLabel(taxRate: string | number, prefix = "Обща цена") {
+  return Number(taxRate) ? `${prefix} с ДДС` : `${prefix} (не се начислява ДДС)`;
+}
+
+export const vatRateOptions = [
+  { value: "20", label: "ДДС 20%" },
+  { value: "9", label: "ДДС 9%" },
+  { value: "0", label: "Без ДДС" },
+] as const;

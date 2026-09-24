@@ -8,6 +8,8 @@ import { DatePicker } from "@/components/ui/date-picker";
 
 import { StagedAttachments, useUploadStagedFiles } from "@/components/change-orders/staged-attachments";
 import { Stepper } from "@/components/change-orders/stepper";
+import { VatRateField } from "@/components/change-orders/vat-rate-field";
+import { vatLabel } from "@/modules/change-orders/labels";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -73,7 +75,8 @@ export function OfferForm({
   const [files, setFiles] = useState<File[]>([]);
   const uploadProgress = useUploadStagedFiles(state.createdId, files, "offer-created");
 
-  const taxRate = Number(defaultTaxRate);
+  const [taxRateValue, setTaxRateValue] = useState(String(Number(defaultTaxRate)));
+  const taxRate = Number(taxRateValue);
   const projectName = project?.name ?? "";
 
   const priced = useMemo(
@@ -201,7 +204,7 @@ export function OfferForm({
                 <Plus className="size-4" /> Ред
               </Button>
             </div>
-            <div className="hidden grid-cols-[minmax(0,1fr)_6.5rem_4.5rem_9.5rem_5.5rem_2.25rem] gap-2 px-4 py-2 text-xs text-muted-foreground sm:grid">
+            <div className="hidden grid-cols-[minmax(0,1fr)_6.5rem_4.5rem_9.5rem_5.5rem_2.25rem] gap-2 px-4 py-2 text-xs text-muted-foreground xl:grid">
               <span>Описание</span>
               <span>К-во</span>
               <span>Мярка</span>
@@ -215,9 +218,9 @@ export function OfferForm({
                 return (
                   <div
                     key={line.key}
-                    className="px-4 py-3 sm:grid sm:grid-cols-[minmax(0,1fr)_6.5rem_4.5rem_9.5rem_5.5rem_2.25rem] sm:items-center sm:gap-2"
+                    className="px-4 py-3 xl:grid xl:grid-cols-[minmax(0,1fr)_6.5rem_4.5rem_9.5rem_5.5rem_2.25rem] xl:items-center xl:gap-2"
                   >
-                    <div className="flex gap-2 sm:contents">
+                    <div className="flex gap-2 xl:contents">
                       <Input
                         value={line.description}
                         placeholder="Какво включва редът"
@@ -233,7 +236,7 @@ export function OfferForm({
                         type="button"
                         aria-label="Премахни ред"
                         isDisabled={lines.length === 1}
-                        className="grid size-10 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-30 sm:hidden"
+                        className="grid size-10 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-30 xl:hidden"
                         onPress={() =>
                           setLines((current) =>
                             current.filter((item) => item.key !== line.key),
@@ -243,7 +246,7 @@ export function OfferForm({
                         <Trash2 className="size-4" />
                       </Button>
                     </div>
-                    <div className="mt-2 grid grid-cols-[6.5rem_minmax(3.5rem,4.5rem)_minmax(0,1fr)] items-center gap-2 sm:contents">
+                    <div className="mt-2 grid grid-cols-[6.5rem_minmax(3.5rem,4.5rem)_minmax(0,1fr)] items-center gap-2 xl:contents">
                       <Stepper
                         name={`quantity-${line.key}`}
                         label={`Количество ${index + 1}`}
@@ -284,14 +287,14 @@ export function OfferForm({
                         </span>
                       </label>
                     </div>
-                    <p className="mt-1 text-right text-sm font-medium tabular-nums sm:mt-0">
+                    <p className="mt-1 text-right text-sm font-medium tabular-nums xl:mt-0">
                       {formatMoney(row?.lineTotal ?? 0)}
                     </p>
                     <Button
                       type="button"
                       aria-label="Премахни ред"
                       isDisabled={lines.length === 1}
-                      className="hidden size-9 place-items-center justify-self-end rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-30 sm:grid"
+                      className="hidden size-9 place-items-center justify-self-end rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-30 xl:grid"
                       onPress={() =>
                         setLines((current) =>
                           current.filter((item) => item.key !== line.key),
@@ -304,6 +307,10 @@ export function OfferForm({
                 );
               })}
             </div>
+          </section>
+
+          <section className="rounded-2xl border bg-card p-4">
+            <VatRateField value={taxRateValue} onChange={setTaxRateValue} />
           </section>
 
           <label className="block rounded-2xl border bg-card p-4 text-sm font-medium">Договорен краен срок
@@ -321,7 +328,7 @@ export function OfferForm({
               <dd className="tabular-nums">{formatMoney(totals.subtotal)}</dd>
             </div>
             <div className="flex justify-between gap-3">
-              <dt className="text-muted-foreground">ДДС {defaultTaxRate}%</dt>
+              <dt className="text-muted-foreground">{vatLabel(taxRate)}</dt>
               <dd className="tabular-nums">{formatMoney(totals.tax)}</dd>
             </div>
             <div className="flex justify-between gap-3 border-t pt-2 text-base font-semibold">
@@ -342,7 +349,7 @@ export function OfferForm({
         <input type="hidden" name="title" value={title} />
         <input type="hidden" name="description" value={description} />
         <input type="hidden" name="lines" value={JSON.stringify(payload)} />
-        <input type="hidden" name="taxRate" value={defaultTaxRate} />
+        <input type="hidden" name="taxRate" value={taxRateValue} />
         <input type="hidden" name="scheduleImpactType" value="none" />
         <input type="hidden" name="agreedDeadline" value={deadline} />
         {files.length ? <input type="hidden" name="hasAttachments" value="1" /> : null}
@@ -381,7 +388,7 @@ export function OfferForm({
             </p>
             <div className="text-sm sm:text-right">
               <p className="text-muted-foreground">
-                Без ДДС {formatMoney(totals.subtotal)} · ДДС {defaultTaxRate}%
+                {taxRate ? `Без ДДС ${formatMoney(totals.subtotal)} · ${vatLabel(taxRate)}` : "Не се начислява ДДС"}
               </p>
               <p className="mt-1 text-xl font-semibold tabular-nums">
                 {formatMoney(totals.total)} EUR

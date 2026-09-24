@@ -21,7 +21,7 @@ const labels: Record<string, string> = {
   changes_requested: "Поискана промяна",
   canceled: "Анулирана",
   expired: "Изтекла",
-  superseded: "Заменена с нова версия",
+  superseded: "Обновява се",
 };
 const tabs = ["overview", "documents", "schedule", "payments"] as const;
 

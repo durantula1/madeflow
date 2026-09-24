@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Stepper } from "@/components/change-orders/stepper";
+import { VatRateField } from "@/components/change-orders/vat-rate-field";
 import {
   ProjectCombobox,
   type ProjectOption,
@@ -342,7 +343,9 @@ export function QuickChangeForm({
           </div>
         </section>
       )}
-      <input type="hidden" name="taxRate" value={defaultTaxRate} />
+      <section className="rounded-2xl border bg-card p-4 shadow-sm sm:p-6">
+        <VatRateField defaultValue={defaultTaxRate} />
+      </section>
       <StagedAttachments files={files} onChange={setFiles} />
       {files.length ? <input type="hidden" name="hasAttachments" value="1" /> : null}
 

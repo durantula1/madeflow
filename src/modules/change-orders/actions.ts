@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, isNull, max, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, lt, max, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { getDatabase } from "@/db";
@@ -25,6 +25,7 @@ import { createStablePortalToken } from "@/lib/crypto/portal-token";
 import { escapeHtml, sendEmail } from "@/lib/email/send";
 import { getActivePortalLink } from "@/modules/change-portal/links";
 import { getProjectState } from "@/modules/projects/state";
+import { summarizeRevisionDiff, type RevisionDiff } from "@/modules/change-orders/revision-diff";
 
 /** `createdId` comes back instead of a redirect when the form still has files to upload. */
 export type QuickChangeState = { error?: string; createdId?: string };
@@ -407,8 +408,11 @@ export async function createDocumentRevisionAction(_state: QuickChangeState, for
       .from(changeOrders).innerJoin(changeOrderRevisions, eq(changeOrderRevisions.id, changeOrders.currentRevisionId))
       .where(and(eq(changeOrders.id, data.changeOrderId), eq(changeOrders.organizationId, context.organizationId)))
       .for("update").limit(1);
-    if (!current || !["draft", "changes_requested", "declined"].includes(current.status)) throw new Error("Тази версия не може да бъде редактирана.");
-    if (current.status === "draft") await tx.update(changeOrderRevisions).set({ status: "superseded" }).where(eq(changeOrderRevisions.id, current.id));
+    if (!current || !["draft", "sent", "viewed", "changes_requested", "declined", "expired"].includes(current.status)) throw new Error("Тази версия не може да бъде редактирана.");
+    // A sent version the client has not decided on yet is taken back; the row lock above keeps a concurrent client decision out.
+    const withdrawn = current.status === "sent" || current.status === "viewed";
+    if (current.status === "draft" || withdrawn) await tx.update(changeOrderRevisions).set({ status: "superseded" }).where(eq(changeOrderRevisions.id, current.id));
+    if (withdrawn) await tx.insert(timelineEvents).values({ organizationId: context.organizationId, projectId: document.projectId, changeOrderId: data.changeOrderId, revisionId: current.id, actorType: "staff", actorId: context.userId, eventType: "revision_withdrawn", visibility: "client", metadata: { revisionNumber: current.revisionNumber } });
     const [revision] = await tx.insert(changeOrderRevisions).values({
       changeOrderId: data.changeOrderId, revisionNumber: current.revisionNumber + 1,
       title: data.title, description: data.description, reason: data.reason || null,
@@ -456,6 +460,7 @@ export async function sendChangeOrderAction(formData: FormData) {
           projectId: changeOrders.projectId,
           documentKind: changeOrders.documentKind,
           revisionId: changeOrders.currentRevisionId,
+          offerValidityDays: organizations.offerValidityDays,
         })
         .from(changeOrders)
         .innerJoin(
@@ -513,6 +518,9 @@ export async function sendChangeOrderAction(formData: FormData) {
         .from(changeAttachments)
         .where(eq(changeAttachments.revisionId, revision.id))
         .orderBy(changeAttachments.id);
+      const now = new Date();
+      // The client sees until when the price holds; it is part of what they agree to.
+      const responseDueAt = new Date(now.getTime() + change.offerValidityDays * 86_400_000);
       const contentHash = hashCanonicalJson({
         changeOrderId: change.id,
         revisionNumber: revision.revisionNumber,
@@ -532,12 +540,12 @@ export async function sendChangeOrderAction(formData: FormData) {
         clientNote: revision.clientNote,
         lineItems,
         ...(attachments.length ? { attachments } : {}),
+        responseDueAt: responseDueAt.toISOString(),
       });
-      const now = new Date();
       if (revision.status === "draft") {
         await transaction
           .update(changeOrderRevisions)
-          .set({ status: "sent", frozenAt: now, contentHash })
+          .set({ status: "sent", frozenAt: now, contentHash, responseDueAt })
           .where(
             and(
               eq(changeOrderRevisions.id, revision.id),
@@ -581,7 +589,15 @@ export async function sendChangeOrderAction(formData: FormData) {
         expiresAt: null,
         createdBy: context.userId,
       });
-      return { projectId: change.projectId, contact, documentKind: change.documentKind, title: revision.title, revisionNumber: revision.revisionNumber };
+      // When the client already saw an earlier version, tell them what is different in this one.
+      const [previous] = await transaction.select().from(changeOrderRevisions)
+        .where(and(eq(changeOrderRevisions.changeOrderId, change.id), lt(changeOrderRevisions.revisionNumber, revision.revisionNumber), isNotNull(changeOrderRevisions.frozenAt)))
+        .orderBy(desc(changeOrderRevisions.revisionNumber)).limit(1);
+      const diff = previous ? summarizeRevisionDiff(
+        { ...previous, lineItems: await transaction.select().from(changeOrderLineItems).where(eq(changeOrderLineItems.revisionId, previous.id)) },
+        { ...revision, lineItems },
+      ) : null;
+      return { projectId: change.projectId, contact, documentKind: change.documentKind, title: revision.title, revisionNumber: revision.revisionNumber, diff };
     },
   );
 
@@ -591,15 +607,24 @@ export async function sendChangeOrderAction(formData: FormData) {
   redirect(`/app/offers/${changeOrderId}`);
 }
 
-async function emailPortalLink(input: { organizationName: string; projectId: string; contact: { id: string; name: string; email: string | null }; documentKind: "offer" | "change"; title: string; revisionNumber: number }) {
+async function emailPortalLink(input: { organizationName: string; projectId: string; contact: { id: string; name: string; email: string | null }; documentKind: "offer" | "change"; title: string; revisionNumber: number; diff: RevisionDiff | null }) {
   if (!input.contact.email) return;
   const url = await getActivePortalLink(input.projectId, input.contact.id);
   if (!url) return;
   const kind = input.documentKind === "offer" ? "оферта" : "промяна";
+  const diff = input.diff;
+  const subject = diff ? `${input.organizationName} обнови ${kind}: ${input.title}` : `${input.organizationName} ти изпрати ${kind}: ${input.title}`;
+  const intro = diff
+    ? `${input.organizationName} обнови ${kind} „${input.title}“. Версия ${input.revisionNumber} заменя версия ${diff.previousNumber}.`
+    : `${input.organizationName} ти изпрати ${kind} „${input.title}“ (версия ${input.revisionNumber}).`;
+  const totalLine = diff && diff.totalBefore !== diff.totalAfter ? `Сума: ${diff.totalBefore.toFixed(2)} → ${diff.totalAfter.toFixed(2)} ${diff.currency}` : null;
+  const changeLines = diff ? [...(totalLine ? [totalLine] : []), ...diff.changes] : [];
+  const changesText = changeLines.length ? `\n\nКакво се промени:\n${changeLines.map((line) => `• ${line}`).join("\n")}` : "";
+  const changesHtml = changeLines.length ? `<p style="margin:16px 0 4px;font-weight:600">Какво се промени</p><ul style="margin:0;padding-left:20px">${changeLines.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>` : "";
   await sendEmail({
     to: input.contact.email,
-    subject: `${input.organizationName} ти изпрати ${kind}: ${input.title}`,
-    text: `Здравей, ${input.contact.name}!\n\n${input.organizationName} ти изпрати ${kind} „${input.title}“ (версия ${input.revisionNumber}).\n\nПрегледай я тук: ${url}\n\nРешението се потвърждава с еднократен код, който получаваш само ти на този имейл.`,
-    html: `<p>Здравей, ${escapeHtml(input.contact.name)}!</p><p>${escapeHtml(input.organizationName)} ти изпрати ${kind} „${escapeHtml(input.title)}“ (версия ${input.revisionNumber}).</p><p><a href="${url}" style="display:inline-block;padding:12px 20px;border-radius:10px;background:#18181b;color:#fff;text-decoration:none;font-weight:600">Прегледай документа</a></p><p style="color:#71717a">Решението се потвърждава с еднократен код, който получаваш само ти на този имейл. Не препращай този линк.</p>`,
+    subject,
+    text: `Здравей, ${input.contact.name}!\n\n${intro}${changesText}\n\nПрегледай я тук: ${url}\n\nРешението се потвърждава с еднократен код, който получаваш само ти на този имейл.`,
+    html: `<div style="max-width:600px"><p>Здравей, ${escapeHtml(input.contact.name)}!</p><p>${escapeHtml(intro)}</p>${changesHtml}<p style="margin-top:20px"><a href="${url}" style="display:block;padding:14px 20px;border-radius:10px;background:#18181b;color:#fff;text-decoration:none;font-weight:600;text-align:center">Прегледай документа</a></p><p style="color:#71717a">Решението се потвърждава с еднократен код, който получаваш само ти на този имейл. Не препращай този линк.</p></div>`,
   });
 }

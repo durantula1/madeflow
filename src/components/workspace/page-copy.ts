@@ -1,4 +1,9 @@
 export const workspacePageCopy = {
+  guide: {
+    eyebrow: "Ръководство",
+    title: "Как работи MadeFlow",
+    description: "Целият път на една оферта, обяснен без технически думи. Избери сценарий и натисни „Пусни“.",
+  },
   dashboard: {
     eyebrow: "Работен преглед",
     title: "Какво чака действие",

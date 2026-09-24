@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Plus } from "lucide-react";
+import { BellRing, Eye, PencilLine, Plus, TimerReset } from "lucide-react";
 import { AttachmentsPanel } from "@/components/change-orders/attachments-panel";
 import { CopyPortalLink } from "@/components/change-orders/copy-portal-link";
 import { RevisionForm } from "@/components/change-orders/revision-form";
@@ -17,18 +17,25 @@ import { requireTenantContext } from "@/lib/authz/tenant-context";
 import { can } from "@/lib/authz/permissions";
 import { getCurrentMember, requireProjectCapability } from "@/lib/authz/project-access";
 import { sendChangeOrderAction } from "@/modules/change-orders/actions";
+import { remindClientAction } from "@/modules/change-orders/reminder-actions";
 import { listRevisionAttachments } from "@/modules/change-orders/attachment-data";
-import { documentCode, scheduleLabel } from "@/modules/change-orders/labels";
+import { documentCode, scheduleLabel, totalLabel, vatLabel } from "@/modules/change-orders/labels";
 import { lastPage, pageHref, pageOffset, parsePage } from "@/lib/pagination";
 import { countChangeOrders, getChangeOrder, listChangeOrders } from "@/modules/change-orders/queries";
 import { getActivePortalLink } from "@/modules/change-portal/links";
 import { maskEmail } from "@/lib/email/send";
+import { loadSignature } from "@/modules/change-portal/signature";
 import { changesCardTitle, documentStatsClassName, documentTabLabels } from "./document-skeleton";
 
 const eventLabels: Record<string, string> = {
   change_created: "Създадена чернова",
   offer_created: "Създадена чернова",
   revision_sent: "Изпратена към клиента",
+  revision_created: "Създадена нова версия",
+  revision_withdrawn: "Изпратената версия е оттеглена за корекция",
+  revision_viewed: "Клиентът отвори документа",
+  revision_expired: "Срокът за решение изтече",
+  client_reminded: "Изпратено напомняне към клиента",
   decision_approved: "Одобрена от клиента",
   decision_declined: "Отказана от клиента",
   changes_requested: "Клиентът поиска промяна",
@@ -61,8 +68,11 @@ export default async function ChangeOrderPage({ params, searchParams }: PageProp
   ]);
   if (isOffer && !offerChanges.length && changesPage > lastPage(offerChangesTotal, CHANGES_PAGE_SIZE)) redirect(pageHref(path, {}, "changesPage", lastPage(offerChangesTotal, CHANGES_PAGE_SIZE)));
   if (!can(member, "drafts.view_all") && !change.frozenAt && change.revisionCreatedBy !== context.userId) notFound();
-  const canEdit = ["draft", "changes_requested", "declined"].includes(change.revisionStatus) && can(member, change.documentKind === "offer" ? "offers.edit" : "changes.draft");
+  const canEdit = ["draft", "sent", "viewed", "changes_requested", "declined", "expired"].includes(change.revisionStatus) && can(member, change.documentKind === "offer" ? "offers.edit" : "changes.draft");
+  const awaitingClient = change.revisionStatus === "sent" || change.revisionStatus === "viewed";
   const kindLabel = change.documentKind === "offer" ? "Оферта" : "Промяна";
+  const signatureBytes = change.decision?.signatureStoragePath ? await loadSignature(change.decision.signatureStoragePath).catch(() => null) : null;
+  const signatureSrc = signatureBytes ? `data:image/png;base64,${signatureBytes.toString("base64")}` : null;
   const disputed = change.disputeEvent;
   const changesPageParam = changesPage > 1 ? String(changesPage) : undefined;
   const olderEventsHref = change.hasOlderEvents && change.events.length ? pageHref(path, { changesPage: changesPageParam, eventsBefore: String(change.events[change.events.length - 1].id) }, "changesPage", changesPage) : null;
@@ -96,11 +106,25 @@ export default async function ChangeOrderPage({ params, searchParams }: PageProp
                 <ActionSubmit>Замрази и изпрати</ActionSubmit>
               </ActionForm>
             ) : null}
+            {canEdit && (awaitingClient || change.revisionStatus === "expired") ? <Link href={`${path}?tab=edit#document-tabs`} className="inline-flex h-8 items-center gap-1.5 rounded-lg border bg-card px-2.5 text-sm font-medium"><PencilLine className="size-4" /> {change.revisionStatus === "expired" ? "Нов срок / коригирай" : "Коригирай"}</Link> : null}
+            {awaitingClient && can(member, "documents.send") ? (
+              <ActionForm action={remindClientAction} success="Напомнянето е изпратено">
+                <input type="hidden" name="changeOrderId" value={change.id} />
+                <ActionSubmit variant="outline" className="h-8 gap-1.5"><BellRing className="size-4" /> Напомни</ActionSubmit>
+              </ActionForm>
+            ) : null}
             {change.frozenAt ? <a href={`/api/changes/${change.id}/pdf`} className="inline-flex h-8 items-center rounded-lg border bg-card px-2.5 text-sm font-medium">Свали PDF</a> : null}
             {portalUrl ? <CopyPortalLink url={portalUrl} /> : null}
           </div>
         }
       />
+      {awaitingClient || change.revisionStatus === "expired" ? (
+        <div className="flex flex-col gap-2 rounded-xl border bg-card p-4 text-sm sm:flex-row sm:flex-wrap sm:gap-x-6">
+          <p className="flex items-center gap-2"><Eye className="size-4 shrink-0 text-muted-foreground" />{change.viewedAt ? `Клиентът я отвори на ${formatDate(change.viewedAt)}` : "Клиентът още не я е отворил"}</p>
+          {change.responseDueAt ? <p className={`flex items-center gap-2 ${change.revisionStatus === "expired" ? "font-medium text-destructive" : ""}`}><TimerReset className="size-4 shrink-0 text-muted-foreground" />{change.revisionStatus === "expired" ? `Изтече на ${formatDate(change.responseDueAt)}` : `Валидна до ${formatDate(change.responseDueAt)}`}</p> : null}
+          {change.clientRemindedAt ? <p className="flex items-center gap-2"><BellRing className="size-4 shrink-0 text-muted-foreground" />Последно напомняне: {formatDate(change.clientRemindedAt)}</p> : null}
+        </div>
+      ) : null}
       {disputed ? (
         <div role="alert" className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
           <p className="font-semibold">Клиентът оспори решението по тази версия</p>
@@ -115,13 +139,20 @@ export default async function ChangeOrderPage({ params, searchParams }: PageProp
             <p><span className="text-muted-foreground">Време:</span> {formatDate(change.decision.createdAt)}</p>
             <p><span className="text-muted-foreground">Потвърдено с код до:</span> {change.decision.verifiedEmail ? maskEmail(change.decision.verifiedEmail) : "— (старо решение без код)"}</p>
             <p><span className="text-muted-foreground">IP адрес:</span> {change.decision.ip ?? "—"}</p>
+            {signatureSrc ? (
+              <div className="sm:col-span-2">
+                <p className="text-muted-foreground">Подпис:</p>
+                {/* eslint-disable-next-line @next/next/no-img-element -- inline data URL from private storage */}
+                <img src={signatureSrc} alt={`Подпис на ${change.decision.typedName}`} className="mt-1 h-24 w-full max-w-xs rounded-lg border bg-white object-contain p-2" />
+              </div>
+            ) : null}
             <p className="break-all sm:col-span-2"><span className="text-muted-foreground">Отпечатък на версията:</span> <span className="font-mono text-xs">{change.decision.revisionContentHash}</span></p>
           </CardContent>
         </Card>
       ) : null}
       <div className={documentStatsClassName}>
-        <StatCard size="lg" label="Обща цена с ДДС" value={`${Number(change.total).toFixed(2)} ${change.currency}`} />
-        <StatCard size="lg" label={`ДДС ${change.taxRate}%`} value={`${Number(change.taxAmount).toFixed(2)} ${change.currency}`} />
+        <StatCard size="lg" label={totalLabel(change.taxRate)} value={`${Number(change.total).toFixed(2)} ${change.currency}`} />
+        <StatCard size="lg" label={vatLabel(change.taxRate)} value={`${Number(change.taxAmount).toFixed(2)} ${change.currency}`} />
         <StatCard size="sm" label={change.documentKind === "offer" ? "Срок" : "Отражение върху срока"} value={scheduleLabel(change.documentKind, change.scheduleImpactType, change.scheduleImpactDays, change.agreedDeadline)} />
       </div>
       {isOffer ? (
@@ -151,7 +182,8 @@ export default async function ChangeOrderPage({ params, searchParams }: PageProp
           </CardContent>
         </Card>
       ) : null}
-      <Tabs defaultSelectedKey={eventsBefore !== undefined ? "history" : "preview"}>
+      <div id="document-tabs" className="scroll-mt-20" />
+      <Tabs key={query.tab === "edit" ? "edit" : "view"} defaultSelectedKey={eventsBefore !== undefined ? "history" : query.tab === "edit" && canEdit ? "edit" : "preview"}>
         <TabsList>
           <TabsTrigger id="preview">{documentTabLabels.preview}</TabsTrigger>
           {canEdit ? <TabsTrigger id="edit">{documentTabLabels.edit}</TabsTrigger> : null}
@@ -184,7 +216,7 @@ export default async function ChangeOrderPage({ params, searchParams }: PageProp
           />
           {change.internalNote && can(member, "notes.view") ? <Card><CardHeader><CardTitle>Вътрешна бележка</CardTitle></CardHeader><CardContent className="text-muted-foreground">{change.internalNote}</CardContent></Card> : null}
         </TabsContent>
-        {canEdit ? <TabsContent id="edit" className="pt-5"><RevisionForm initial={{ id: change.id, documentKind: change.documentKind, title: change.title, description: change.description, reason: change.reason, changeKind: change.changeKind, subtotal: change.subtotal, taxRate: change.taxRate, scheduleImpactType: change.scheduleImpactType, scheduleImpactDays: change.scheduleImpactDays, agreedDeadline: change.agreedDeadline, clientNote: change.clientNote, internalNote: change.internalNote, lineItems: change.lineItems }} /></TabsContent> : null}
+        {canEdit ? <TabsContent id="edit" className="pt-5"><RevisionForm withdrawsRevision={awaitingClient ? change.revisionNumber : undefined} initial={{ id: change.id, documentKind: change.documentKind, title: change.title, description: change.description, reason: change.reason, changeKind: change.changeKind, subtotal: change.subtotal, taxRate: change.taxRate, scheduleImpactType: change.scheduleImpactType, scheduleImpactDays: change.scheduleImpactDays, agreedDeadline: change.agreedDeadline, clientNote: change.clientNote, internalNote: change.internalNote, lineItems: change.lineItems }} /></TabsContent> : null}
         <TabsContent id="history" className="flex flex-col gap-5 pt-5">
           <Card>
             <CardHeader><CardTitle>Версии</CardTitle></CardHeader>

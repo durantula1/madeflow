@@ -40,6 +40,9 @@ const styles = StyleSheet.create({
   summaryRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 3 },
   summaryTotal: { flexDirection: "row", justifyContent: "space-between", marginTop: 6, paddingTop: 8, borderTop: `1.5 solid ${ink}`, fontSize: 12, fontWeight: 600 },
   decision: { marginTop: 22, padding: 12, borderRadius: 6, backgroundColor: "#f1f4f1" },
+  signature: { marginTop: 10, width: 200 },
+  signatureImage: { height: 70, objectFit: "contain", objectPosition: "left" },
+  signatureCaption: { fontSize: 8, color: muted, marginTop: 3, paddingTop: 3, borderTop: `0.75 solid ${muted}` },
   photos: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
   photo: { width: "49%", marginBottom: 10 },
   photoImage: { width: "100%", height: 170, objectFit: "cover", borderRadius: 4 },
@@ -60,8 +63,8 @@ function formatDeadline(value: string | null) {
 
 export function ChangePdfDocument({ organization, project, siteAddress, contact, kind, code, revision, lines, decision, photos = [] }: {
   organization: string; project: string; siteAddress: string; contact: string; kind: "offer" | "change"; code: string;
-  revision: { title: string; description: string; reason: string | null; revisionNumber: number; changeKind: string; subtotal: string; taxAmount: string; total: string; currency: string; taxRate: string; agreedDeadline: string | null; contentHash: string | null; frozenAt: Date | null; clientNote: string | null };
-  lines: Line[]; decision: { decision: string; typedName: string; createdAt: Date; verifiedEmail?: string | null } | null;
+  revision: { title: string; description: string; reason: string | null; revisionNumber: number; changeKind: string; subtotal: string; taxAmount: string; total: string; currency: string; taxRate: string; agreedDeadline: string | null; contentHash: string | null; frozenAt: Date | null; clientNote: string | null; responseDueAt?: Date | null };
+  lines: Line[]; decision: { decision: string; typedName: string; createdAt: Date; verifiedEmail?: string | null; ip?: string | null; signature?: Buffer | null } | null;
   photos?: PdfPhoto[];
 }) {
   const money = new Intl.NumberFormat("bg-BG", { style: "currency", currency: revision.currency.trim() || "EUR" });
@@ -92,6 +95,7 @@ export function ChangePdfDocument({ organization, project, siteAddress, contact,
       <View style={styles.fact}><Text style={styles.factLabel}>Адрес</Text><Text>{siteAddress}</Text></View>
       <View style={styles.fact}><Text style={styles.factLabel}>{kind === "offer" ? "Срок за изпълнение" : "Нов краен срок"}</Text><Text>{deadline ?? (kind === "offer" ? "Не е посочен" : "Без промяна")}</Text></View>
       <View style={styles.fact}><Text style={styles.factLabel}>Изпратена</Text><Text>{revision.frozenAt ? dateFormat.format(revision.frozenAt) : "—"}</Text></View>
+      {revision.responseDueAt ? <View style={styles.fact}><Text style={styles.factLabel}>Валидна до</Text><Text>{dateFormat.format(revision.responseDueAt)}</Text></View> : null}
     </View>
 
     <View style={styles.section}>
@@ -117,8 +121,10 @@ export function ChangePdfDocument({ organization, project, siteAddress, contact,
         </View>
       ))}
       <View style={styles.summary} wrap={false}>
-        <View style={styles.summaryRow}><Text style={{ color: muted }}>Без ДДС</Text><Text>{amount(revision.subtotal)}</Text></View>
-        <View style={styles.summaryRow}><Text style={{ color: muted }}>ДДС {Number(revision.taxRate)}%</Text><Text>{amount(revision.taxAmount)}</Text></View>
+        {Number(revision.taxRate) ? <>
+          <View style={styles.summaryRow}><Text style={{ color: muted }}>Без ДДС</Text><Text>{amount(revision.subtotal)}</Text></View>
+          <View style={styles.summaryRow}><Text style={{ color: muted }}>ДДС {Number(revision.taxRate)}%</Text><Text>{amount(revision.taxAmount)}</Text></View>
+        </> : <View style={styles.summaryRow}><Text style={{ color: muted }}>Не се начислява ДДС</Text><Text> </Text></View>}
         <View style={styles.summaryTotal}><Text>Общо</Text><Text>{amount(revision.total)}</Text></View>
       </View>
     </View>
@@ -127,7 +133,14 @@ export function ChangePdfDocument({ organization, project, siteAddress, contact,
       <View style={styles.decision} wrap={false}>
         <Text style={styles.heading}>Решение на клиента</Text>
         <Text>{decision.decision === "approved" ? "Одобрено" : decision.decision === "declined" ? "Отказано" : "Поискана корекция"} от {decision.typedName} на {dateTimeFormat.format(decision.createdAt)}.</Text>
-        {decision.verifiedEmail ? <Text style={{ color: muted }}>Потвърдено с еднократен код, изпратен до {decision.verifiedEmail}.</Text> : null}
+        {decision.verifiedEmail ? <Text style={{ color: muted }}>Потвърдено с еднократен код, изпратен до {decision.verifiedEmail}{decision.ip ? `, IP ${decision.ip}` : ""}.</Text> : null}
+        {decision.signature ? (
+          <View style={styles.signature}>
+            {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt attribute */}
+            <Image src={decision.signature} style={styles.signatureImage} />
+            <Text style={styles.signatureCaption}>Подпис: {decision.typedName}</Text>
+          </View>
+        ) : null}
       </View>
     ) : null}
 

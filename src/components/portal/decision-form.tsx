@@ -5,6 +5,7 @@ import { CheckCircle2, MessageSquareText, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { SignatureField } from "@/components/portal/signature-pad";
 import {
   requestDecisionCodeAction,
   submitPortalDecisionAction,
@@ -37,8 +38,10 @@ export function PortalDecisionForm({
   const [typedName, setTypedName] = useState("");
   const [comment, setComment] = useState("");
   const [consent, setConsent] = useState(false);
+  const [signature, setSignature] = useState("");
+  const [signatureError, setSignatureError] = useState("");
   const otpId = codeState.otpId && codeFor === decision ? codeState.otpId : null;
-  const error = otpId ? submitState.error : codeState.error;
+  const error = signatureError || (otpId ? submitState.error : codeState.error);
 
   function choose(next: typeof decision) {
     setDecision(next);
@@ -47,7 +50,12 @@ export function PortalDecisionForm({
 
   return (
     <form
-      action={otpId ? submit : (formData) => { setCodeFor(decision); return requestCode(formData); }}
+      action={otpId ? submit : (formData) => {
+        if (decision === "approved" && !signature) { setSignatureError("Подпиши се в полето за подпис."); return; }
+        setSignatureError("");
+        setCodeFor(decision);
+        return requestCode(formData);
+      }}
       className="space-y-4"
     >
       <input type="hidden" name="projectPublicId" value={projectPublicId} />
@@ -55,6 +63,7 @@ export function PortalDecisionForm({
       <input type="hidden" name="revisionId" value={revisionId} />
       <input type="hidden" name="decision" value={decision} />
       <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+      {decision === "approved" ? <input type="hidden" name="signature" value={signature} /> : null}
       {otpId ? <input type="hidden" name="otpId" value={otpId} /> : null}
       <div className="grid grid-cols-3 gap-2">
         <Button
@@ -109,6 +118,11 @@ export function PortalDecisionForm({
               className="bg-background"
             />
           </label>
+        )}
+        {decision === "approved" && (
+          <div className="mt-4">
+            <SignatureField onChange={(value) => { setSignature(value); if (value) setSignatureError(""); }} disabled={!!otpId} />
+          </div>
         )}
         {decision === "approved" && (
           <label className="mt-4 flex items-start gap-3 text-sm">

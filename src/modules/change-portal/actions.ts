@@ -25,6 +25,7 @@ import { createDisputeToken, getDisputeTarget, parseDisputeToken } from "@/modul
 import { getPortalSession, isOrganizationStaff } from "@/modules/change-portal/session";
 import { checkOtp, consumeOtp, issueOtp } from "@/modules/change-portal/verification";
 import { getPdfDocumentMeta, renderChangePdf } from "@/modules/pdf/render";
+import { parseSignature, removeSignature, storeSignature } from "@/modules/change-portal/signature";
 
 const decisionSchema = z.object({
   projectPublicId: z.uuid(),
@@ -33,6 +34,7 @@ const decisionSchema = z.object({
   decision: z.enum(["approved", "declined", "changes_requested"]),
   typedName: z.string().trim().min(2, "Въведи името си.").max(160),
   comment: z.string().trim().max(2000).optional(),
+  signature: z.string().max(400_000).optional(),
 });
 
 export type DecisionState = { error?: string; otpId?: string; sentTo?: string };
@@ -41,6 +43,7 @@ const decisionLabels = { approved: "Одобряваш", declined: "Отказв
 
 async function decisionContext(data: z.infer<typeof decisionSchema>) {
   if (data.decision === "changes_requested" && !data.comment) throw new Error("Опиши накратко какво трябва да се промени.");
+  if (data.decision === "approved") parseSignature(data.signature);
   const session = await getPortalSession(data.projectPublicId);
   if (!session || session.contactRole !== "approver") throw new Error("Нямаш право да вземеш решение.");
   if (!session.contactEmailVerifiedAt || !session.contactEmail) throw new Error("Първо потвърди имейла си.");
@@ -67,6 +70,7 @@ async function pendingRevision(tx: Pick<ReturnType<typeof getDatabase>, "select"
       revisionNumber: changeOrderRevisions.revisionNumber,
       total: changeOrderRevisions.total,
       currency: changeOrderRevisions.currency,
+      currentRevisionId: changeOrders.currentRevisionId,
     })
     .from(changeOrderRevisions)
     .innerJoin(changeOrders, eq(changeOrders.id, changeOrderRevisions.changeOrderId))
@@ -74,10 +78,11 @@ async function pendingRevision(tx: Pick<ReturnType<typeof getDatabase>, "select"
       eq(changeOrderRevisions.id, revisionId),
       eq(changeOrderRevisions.changeOrderId, changeOrderId),
       eq(changeOrders.projectId, projectId),
-      eq(changeOrders.currentRevisionId, revisionId),
     ))
+    .for("update")
     .limit(1);
-  if (!revision?.contentHash || !["sent", "viewed"].includes(revision.status)) throw new Error("Тази версия вече не очаква решение.");
+  if (revision?.status === "superseded") throw new Error("Фирмата обнови този документ. Презареди страницата, за да видиш последната версия.");
+  if (!revision?.contentHash || revision.currentRevisionId !== revision.id || !["sent", "viewed"].includes(revision.status)) throw new Error("Тази версия вече не очаква решение.");
   return { ...revision, contentHash: revision.contentHash };
 }
 
@@ -108,14 +113,19 @@ export async function submitPortalDecisionAction(_: DecisionState, formData: For
   const data = parsed.data;
   let session: Awaited<ReturnType<typeof decisionContext>>;
   let decisionId: number | undefined;
+  let signature: { path: string; sha256: string } | null = null;
   try {
     session = await decisionContext(data);
     const otp = await checkOtp({ otpId: data.otpId, code: data.code, sessionId: session.id, contactId: session.contactId, purpose: "decision" });
     if (otp.revisionId !== data.revisionId || otp.decision !== data.decision) return { error: "Кодът е за друго решение. Поискай нов код." };
     const requestHeaders = await headers();
     const ip = clientIp(requestHeaders);
-    decisionId = await submitDecision(session, data, otp, ip, requestHeaders.get("user-agent"));
+    // The drawing is stored first so the decision row can point at it; a failed decision removes it again.
+    if (data.decision === "approved") signature = await storeSignature({ organizationId: session.organizationId, revisionId: data.revisionId, key: data.idempotencyKey, bytes: parseSignature(data.signature) });
+    decisionId = await submitDecision(session, data, otp, ip, requestHeaders.get("user-agent"), signature);
+    if (!decisionId && signature) signature = null; // a replayed submission already references this file
   } catch (cause) {
+    if (signature) await removeSignature(signature.path);
     return { error: cause instanceof Error ? cause.message : "Решението не беше записано. Опитай отново." };
   }
 
@@ -134,6 +144,7 @@ async function submitDecision(
   otp: { id: string; email: string },
   ip: string | null,
   userAgent: string | null,
+  signature: { path: string; sha256: string } | null,
 ) {
   return getDatabase().transaction(async (transaction) => {
     const existing = await transaction
@@ -156,7 +167,9 @@ async function submitDecision(
         decision: data.decision,
         comment: data.comment || null,
         typedName: data.typedName,
-        consentTextVersion: "bg-v2-2026-09-23-otp",
+        consentTextVersion: signature ? "bg-v3-2026-09-24-signature" : "bg-v2-2026-09-23-otp",
+        signatureStoragePath: signature?.path ?? null,
+        signatureSha256: signature?.sha256 ?? null,
         revisionContentHash: revision.contentHash,
         idempotencyKey: data.idempotencyKey,
         otpId: otp.id,
@@ -188,7 +201,7 @@ async function submitDecision(
       actorId: session.contactId,
       eventType: `decision_${data.decision}`,
       visibility: "client",
-      metadata: { typedName: data.typedName, comment: data.comment || null },
+      metadata: { typedName: data.typedName, comment: data.comment || null, signatureSha256: signature?.sha256 ?? null },
     });
     const members = await transaction.select({ userId: organizationMembers.userId }).from(organizationMembers)
       .leftJoin(projectMembers, and(eq(projectMembers.userId, organizationMembers.userId), eq(projectMembers.projectId, session.projectId)))
@@ -253,6 +266,7 @@ async function sendDecisionReceipt(decisionId: number) {
       ip: portalDecisions.ip,
       createdAt: portalDecisions.createdAt,
       contentHash: portalDecisions.revisionContentHash,
+      signatureSha256: portalDecisions.signatureSha256,
       revisionId: changeOrderRevisions.id,
       revisionNumber: changeOrderRevisions.revisionNumber,
       title: changeOrderRevisions.title,
@@ -274,6 +288,7 @@ async function sendDecisionReceipt(decisionId: number) {
     ["Сума", `${Number(row.total).toFixed(2)} ${row.currency}`],
     ["Решение", decisionReceiptLabels[row.decision]],
     ["Име", row.typedName],
+    ...(row.signatureSha256 ? [["Подпис", "Нарисуван на екрана — виж го в приложения PDF"]] : []),
     ["Време", when],
     ["IP адрес", row.ip ?? "—"],
     ["Отпечатък", row.contentHash],

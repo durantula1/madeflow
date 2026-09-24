@@ -11,8 +11,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AttachmentsPanel } from "@/components/change-orders/attachments-panel";
 import { listRevisionAttachments } from "@/modules/change-orders/attachment-data";
-import { documentCode, scheduleLabel } from "@/modules/change-orders/labels";
+import { documentCode, scheduleLabel, totalLabel, vatLabel } from "@/modules/change-orders/labels";
 import { getPortalChange } from "@/modules/change-portal/queries";
+import { markRevisionViewed } from "@/modules/change-portal/viewed";
 
 const labels: Record<string, string> = {
   sent: "Очаква решение",
@@ -20,14 +21,22 @@ const labels: Record<string, string> = {
   approved: "Одобрена",
   declined: "Отказана",
   changes_requested: "Поискана промяна",
+  superseded: "Обновява се",
+  expired: "Изтекла",
 };
 const eventLabels: Record<string, string> = {
   revision_sent: "Изпратена за решение",
+  revision_withdrawn: "Оттеглена от фирмата за корекция",
+  revision_expired: "Срокът за решение изтече",
   decision_approved: "Одобрена",
   decision_declined: "Отказана",
   decision_changes_requested: "Поискана промяна",
   decision_disputed: "Решението е оспорено от клиента",
 };
+
+function daysUntil(date: Date) {
+  return Math.ceil((date.getTime() - new Date().getTime()) / 86_400_000);
+}
 
 export default async function PortalChangePage({
   params,
@@ -40,6 +49,8 @@ export default async function PortalChangePage({
   const data = await getPortalChange(projectPublicId, changeOrderId);
   if (!data) notFound();
   const change = data.change;
+  if (await markRevisionViewed(data.session, change).catch(() => false)) change.status = "viewed";
+  const daysLeft = change.responseDueAt ? daysUntil(change.responseDueAt) : null;
   const attachments = change.frozenAt ? await listRevisionAttachments(change.revisionId) : [];
   const money = (value: string | number) => Number(value).toFixed(2);
   const isOffer = change.documentKind === "offer";
@@ -105,7 +116,7 @@ export default async function PortalChangePage({
                     <td className="px-3 pt-2.5 text-right tabular-nums text-foreground">{money(change.subtotal)}</td>
                   </tr>
                   <tr>
-                    <td colSpan={3} className="px-3 pb-2.5 text-right">ДДС {change.taxRate}%</td>
+                    <td colSpan={3} className="px-3 pb-2.5 text-right">{Number(change.taxRate) ? vatLabel(change.taxRate) : "Не се начислява ДДС"}</td>
                     <td className="px-3 pb-2.5 text-right tabular-nums text-foreground">{money(Number(change.total) - Number(change.subtotal))}</td>
                   </tr>
                 </tfoot>
@@ -156,7 +167,7 @@ export default async function PortalChangePage({
         <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary" />
         <div>
           <p className="font-medium">
-            {data.decision ? "Решението е записано" : "Тази версия не очаква решение"}
+            {data.decision ? "Решението е записано" : change.status === "superseded" ? "Очаква се обновена версия" : "Тази версия не очаква решение"}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
             {data.decision
@@ -206,12 +217,12 @@ export default async function PortalChangePage({
 
   const summary = (
     <div className="rounded-2xl bg-sidebar p-5 text-sidebar-foreground shadow-sm">
-      <p className="text-sm text-white/60">{isOffer ? "Стойност на офертата с ДДС" : "Стойност на промяната с ДДС"}</p>
+      <p className="text-sm text-white/60">{totalLabel(change.taxRate, isOffer ? "Стойност на офертата" : "Стойност на промяната")}</p>
       <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums text-white">
         {money(change.total)} <span className="text-xl text-white/70">{change.currency}</span>
       </p>
       <p className="mt-1 text-xs text-white/50">
-        Основа {money(change.subtotal)} · ДДС {change.taxRate}%
+        Основа {money(change.subtotal)} · {vatLabel(change.taxRate)}
       </p>
       <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-sidebar-border pt-4 text-sm">
         <CalendarClock className="size-4 shrink-0 text-primary" />
@@ -257,6 +268,34 @@ export default async function PortalChangePage({
           }
         />
       </div>
+      {daysLeft !== null && ["sent", "viewed"].includes(change.status) ? (
+        <div role="status" className={`mt-4 flex items-center gap-2 rounded-xl border p-3 text-sm ${daysLeft <= 2 ? "border-amber-500/40 bg-amber-500/10" : "bg-card"}`}>
+          <CalendarClock className="size-4 shrink-0 text-primary" />
+          <span>Валидна до <span className="font-semibold">{new Intl.DateTimeFormat("bg-BG", { dateStyle: "long" }).format(change.responseDueAt!)}</span>{daysLeft <= 1 ? " · изтича днес" : ` · остават ${daysLeft} дни`}</span>
+        </div>
+      ) : null}
+      {change.status === "expired" ? (
+        <div role="status" className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+          <p className="font-semibold">Срокът на {isOffer ? "офертата" : "промяната"} изтече</p>
+          <p className="mt-1 text-muted-foreground">Свържи се с {data.project.organizationName}, ако все още се интересуваш — те могат да я изпратят отново с нов срок.</p>
+        </div>
+      ) : null}
+      {change.status === "superseded" ? (
+        <div role="status" className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+          <p className="font-semibold">Фирмата обновява {isOffer ? "тази оферта" : "тази промяна"}</p>
+          <p className="mt-1 text-muted-foreground">Версия {change.revisionNumber} е оттеглена за корекция. Ще получиш имейл, когато новата версия е готова за решение.</p>
+        </div>
+      ) : null}
+      {data.diff ? (
+        <div role="status" className="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm">
+          <p className="font-semibold">Версия {change.revisionNumber} заменя версия {data.diff.previousNumber}</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">
+            {data.diff.totalBefore !== data.diff.totalAfter ? <li>Сума: {money(data.diff.totalBefore)} → <span className="font-medium text-foreground">{money(data.diff.totalAfter)} {data.diff.currency}</span></li> : null}
+            {data.diff.changes.map((line) => <li key={line} className="break-words">{line}</li>)}
+            {!data.diff.changes.length && data.diff.totalBefore === data.diff.totalAfter ? <li>Уточнени са описанието или бележките.</li> : null}
+          </ul>
+        </div>
+      ) : null}
       <div className="mt-5">
         <PortalChangeTabs
           details={details}

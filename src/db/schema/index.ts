@@ -187,6 +187,7 @@ export const organizations = appSchema.table(
       .notNull()
       .default("20.00"),
     portalSessionDays: integer("portal_session_days").notNull().default(30),
+    offerValidityDays: integer("offer_validity_days").notNull().default(14),
     stepUpThreshold: numeric("step_up_threshold", {
       precision: 14,
       scale: 2,
@@ -1121,6 +1122,10 @@ export const changeOrderRevisions = appSchema.table(
     scheduleImpactDays: integer("schedule_impact_days"),
     agreedDeadline: date("agreed_deadline"),
     responseDueAt: timestamp("response_due_at", { withTimezone: true }),
+    /** First time the client opened this version in the portal. */
+    viewedAt: timestamp("viewed_at", { withTimezone: true }),
+    clientRemindedAt: timestamp("client_reminded_at", { withTimezone: true }),
+    expiryWarnedAt: timestamp("expiry_warned_at", { withTimezone: true }),
     clientNote: text("client_note"),
     internalNote: text("internal_note"),
     frozenAt: timestamp("frozen_at", { withTimezone: true }),
@@ -1265,6 +1270,8 @@ export const portalDecisions = appSchema.table(
       onDelete: "restrict",
     }),
     verifiedEmail: text("verified_email"),
+    signatureStoragePath: text("signature_storage_path"),
+    signatureSha256: text("signature_sha256"),
     ip: inet("ip"),
     userAgent: text("user_agent"),
     createdAt: timestamp("created_at", { withTimezone: true })

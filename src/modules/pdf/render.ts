@@ -8,6 +8,7 @@ import { changeOrderLineItems, changeOrderRevisions, changeOrders, organizations
 import { loadRevisionPhotos } from "@/modules/change-orders/attachment-data";
 import { documentCode } from "@/modules/change-orders/labels";
 import { ChangePdfDocument } from "@/modules/pdf/change-document";
+import { loadSignature } from "@/modules/change-portal/signature";
 
 export async function getPdfDocumentMeta(changeOrderId: string) {
   const [document] = await getDatabase().select({
@@ -27,11 +28,12 @@ export async function renderChangePdf(document: NonNullable<Awaited<ReturnType<t
   if (!revision?.frozenAt || !revision.contentHash) return null;
   const [lines, [decision], photos] = await Promise.all([
     db.select().from(changeOrderLineItems).where(eq(changeOrderLineItems.revisionId, revision.id)).orderBy(changeOrderLineItems.position),
-    db.select({ decision: portalDecisions.decision, typedName: portalDecisions.typedName, createdAt: portalDecisions.createdAt, verifiedEmail: portalDecisions.verifiedEmail }).from(portalDecisions).where(eq(portalDecisions.revisionId, revision.id)).limit(1),
+    db.select({ decision: portalDecisions.decision, typedName: portalDecisions.typedName, createdAt: portalDecisions.createdAt, verifiedEmail: portalDecisions.verifiedEmail, ip: portalDecisions.ip, signatureStoragePath: portalDecisions.signatureStoragePath }).from(portalDecisions).where(eq(portalDecisions.revisionId, revision.id)).limit(1),
     // A missing storage key must not block the PDF itself.
     loadRevisionPhotos(revision.id).catch(() => []),
   ]);
+  const signature = decision?.signatureStoragePath ? await loadSignature(decision.signatureStoragePath).catch(() => null) : null;
   const code = documentCode(document.kind, document.sequenceNumber);
-  const buffer = await renderToBuffer(ChangePdfDocument({ organization: document.organizationName, project: document.projectName, siteAddress: document.siteAddress, contact: document.contactName ?? "Клиент", kind: document.kind, code, revision, lines, decision: decision ?? null, photos }));
+  const buffer = await renderToBuffer(ChangePdfDocument({ organization: document.organizationName, project: document.projectName, siteAddress: document.siteAddress, contact: document.contactName ?? "Клиент", kind: document.kind, code, revision, lines, decision: decision ? { ...decision, signature } : null, photos }));
   return { buffer, filename: `${document.kind}-${document.sequenceNumber}-v${revision.revisionNumber}.pdf` };
 }
