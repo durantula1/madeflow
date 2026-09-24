@@ -14,6 +14,9 @@ import { listRevisionAttachments } from "@/modules/change-orders/attachment-data
 import { documentCode, scheduleLabel, totalLabel, vatLabel } from "@/modules/change-orders/labels";
 import { getPortalChange } from "@/modules/change-portal/queries";
 import { markRevisionViewed } from "@/modules/change-portal/viewed";
+import { MessageThread } from "@/components/messages/message-thread";
+import { sendClientMessageAction } from "@/modules/messages/actions";
+import { listThread, markThreadRead, unreadCount } from "@/modules/messages/queries";
 
 const labels: Record<string, string> = {
   sent: "Очаква решение",
@@ -50,6 +53,8 @@ export default async function PortalChangePage({
   if (!data) notFound();
   const change = data.change;
   if (await markRevisionViewed(data.session, change).catch(() => false)) change.status = "viewed";
+  const [thread, unreadAnswers] = await Promise.all([listThread(change.id), unreadCount(change.id, "client")]);
+  if (unreadAnswers) await markThreadRead(change.id, "client");
   const daysLeft = change.responseDueAt ? daysUntil(change.responseDueAt) : null;
   const attachments = change.frozenAt ? await listRevisionAttachments(change.revisionId) : [];
   const money = (value: string | number) => Number(value).toFixed(2);
@@ -303,6 +308,18 @@ export default async function PortalChangePage({
           history={history}
           summary={summary}
           pending={awaitingDecision}
+          unreadAnswers={unreadAnswers}
+          questions={
+            <MessageThread
+              side="portal_contact"
+              messages={thread}
+              action={sendClientMessageAction}
+              hidden={{ projectPublicId, changeOrderId: change.id }}
+              placeholder="Напиши въпрос към фирмата…"
+              emptyText={`Не е ясно нещо? Попитай ${data.project.organizationName} тук, без да отказваш или да искаш промяна. Ще получиш отговора и на имейла си.`}
+              composerClassName="sticky bottom-0 lg:static"
+            />
+          }
         />
       </div>
     </>

@@ -17,6 +17,7 @@ export const projectTabLabels = {
   documents: "Документи",
   work: "Работа",
   payments: "Плащания",
+  notes: "Бележки",
 };
 
 export const projectStatsClassName = "grid grid-cols-2 gap-3 xl:grid-cols-4";

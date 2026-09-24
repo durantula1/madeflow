@@ -11,6 +11,7 @@ import {
   changeOrderLineItems,
   changeOrderRevisions,
   changeOrders,
+  internalNotes,
   organizations,
   portalGrants,
   portalSessions,
@@ -198,11 +199,12 @@ export async function createChangeOrderAction(
         scheduleImpactDays: scheduleDays,
         agreedDeadline: data.scheduleImpactType === "days" ? data.agreedDeadline : null,
         clientNote: data.clientNote || null,
-        internalNote: data.internalNote || null,
         createdBy: context.userId,
       })
       .returning({ id: changeOrderRevisions.id });
     if (!revision) throw new Error("Версията не беше създадена.");
+    // Team-only notes live in the notes panel, not on the frozen version.
+    if (data.internalNote) await transaction.insert(internalNotes).values({ organizationId: context.organizationId, projectId: data.projectId, changeOrderId: changeOrder.id, authorId: context.userId, body: data.internalNote });
 
     await transaction
       .update(changeOrders)
@@ -421,7 +423,7 @@ export async function createDocumentRevisionAction(_state: QuickChangeState, for
       taxAmount: taxAmount.toFixed(2), total: total.toFixed(2),
       scheduleImpactType: document.documentKind === "offer" ? "none" : data.scheduleImpactType,
       scheduleImpactDays: scheduleDays,
-      agreedDeadline: data.agreedDeadline || null, clientNote: data.clientNote || null, internalNote: data.internalNote || null,
+      agreedDeadline: data.agreedDeadline || null, clientNote: data.clientNote || null,
       createdBy: context.userId,
     }).returning({ id: changeOrderRevisions.id });
     if (!revision) throw new Error("Версията не беше създадена.");

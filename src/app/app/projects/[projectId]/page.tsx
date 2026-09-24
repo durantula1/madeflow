@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { NotesPanel } from "@/components/notes/notes-panel";
+import { listNotes } from "@/modules/notes/queries";
 import { ActionForm, ActionSubmit } from "@/components/workspace/action-form";
 import { DataTable } from "@/components/workspace/data-table";
 import { DetailHeader } from "@/components/workspace/detail-header";
@@ -35,7 +37,7 @@ const stageLabels: Record<string, string> = { planned: "Предстои", in_pr
 const workLabels: Record<string, string> = { not_started: "Одобрена, предстои", scheduled: "Планирана", in_progress: "В работа", completed: "Завършена" };
 const paymentLabels: Record<string, string> = { deposit: "Капаро", progress: "Междинно", final: "Окончателно", other: "Друго" };
 const methodLabels: Record<string, string> = { cash: "В брой", bank: "Банков превод", card: "Карта", other: "Друго" };
-const tabs = ["overview", "documents", "work", "payments"] as const;
+const tabs = ["overview", "documents", "work", "payments", "notes"] as const;
 const DOCUMENTS_PAGE_SIZE = 10;
 
 export default async function ProjectPage({ params, searchParams }: PageProps<"/app/projects/[projectId]">) {
@@ -56,6 +58,8 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
     getDatabase().select({ id: paymentDisputes.id, reason: paymentDisputes.reason, receiptId: paymentDisputes.receiptId }).from(paymentDisputes).where(and(eq(paymentDisputes.projectId, projectId), eq(paymentDisputes.status, "open"))),
   ]);
   if (!state) notFound();
+  const canNotes = can(member, "notes.view");
+  const notes = canNotes ? await listNotes(context.organizationId, { projectId }) : [];
   const path = `/app/projects/${projectId}`;
   const documentParams = { tab: "documents", offersPage: offersPage > 1 ? String(offersPage) : undefined, changesPage: changesPage > 1 ? String(changesPage) : undefined };
   if (!offers.length && offersPage > lastPage(offersTotal, DOCUMENTS_PAGE_SIZE)) redirect(pageHref(path, documentParams, "offersPage", lastPage(offersTotal, DOCUMENTS_PAGE_SIZE)));
@@ -97,12 +101,13 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
         <StatCard label={projectStatLabels.remaining} value={state.offer ? formatCents(state.remainingMinor, state.currency) : "—"} />
         <StatCard label={projectStatLabels.deadline} value={state.deadline ?? "Очаква одобрение"} />
       </div>
-      <Tabs defaultSelectedKey={tab === "payments" && !showPayments ? "overview" : tab}>
+      <Tabs defaultSelectedKey={(tab === "payments" && !showPayments) || (tab === "notes" && !canNotes) ? "overview" : tab}>
         <TabsList>
           <TabsTrigger id="overview">{projectTabLabels.overview}</TabsTrigger>
           <TabsTrigger id="documents">{projectTabLabels.documents}</TabsTrigger>
           <TabsTrigger id="work">{projectTabLabels.work}</TabsTrigger>
           {showPayments ? <TabsTrigger id="payments">{projectTabLabels.payments}</TabsTrigger> : null}
+          {canNotes ? <TabsTrigger id="notes">{projectTabLabels.notes}{notes.length ? <span className="ml-1 rounded-full bg-sidebar-accent px-1.5 text-[11px]">{notes.length}</span> : null}</TabsTrigger> : null}
         </TabsList>
         <TabsContent id="overview" className="flex flex-col gap-5 pt-5">
           <div className="grid gap-5 lg:grid-cols-2">
@@ -195,6 +200,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
           /> : null}
           <ProjectControls state={state} canManage={canManage} canRecordPayments={canRecordPayments} disputes={disputes} section="payments" />
         </TabsContent> : null}
+        {canNotes ? <TabsContent id="notes" className="pt-5"><NotesPanel projectId={projectId} notes={notes} currentUserId={context.userId} isOwner={member.role === "owner"} /></TabsContent> : null}
       </Tabs>
     </PageShell>
   );

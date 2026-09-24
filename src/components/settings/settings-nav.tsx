@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, CircleUserRound, KeyRound, ShieldCheck } from "lucide-react";
+import { Bell, Building2, CircleUserRound, KeyRound, ShieldCheck } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 const personal = [
   { href: "/app/settings", label: "Профил", icon: CircleUserRound },
+  { href: "/app/settings/notifications", label: "Известия", icon: Bell },
   { href: "/app/settings/security", label: "Сигурност", icon: KeyRound },
   { href: "/app/settings/privacy", label: "Данни и поверителност", icon: ShieldCheck },
 ];

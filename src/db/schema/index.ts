@@ -1462,3 +1462,52 @@ export const paymentDisputes = appSchema.table(
   },
   (table) => [index("payment_disputes_project_status_idx").on(table.projectId, table.status)],
 );
+
+export const internalNotes = appSchema.table(
+  "internal_notes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    changeOrderId: uuid("change_order_id").references(() => changeOrders.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id").notNull(),
+    body: text("body").notNull(),
+    pinned: boolean("pinned").notNull().default(false),
+    ...timestamps,
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("internal_notes_project_idx").on(table.projectId, table.createdAt.desc()),
+    index("internal_notes_change_order_idx").on(table.changeOrderId, table.createdAt.desc()),
+  ],
+);
+
+export const documentMessages = appSchema.table(
+  "document_messages",
+  {
+    id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    changeOrderId: uuid("change_order_id").notNull().references(() => changeOrders.id, { onDelete: "cascade" }),
+    revisionId: bigint("revision_id", { mode: "number" }).references(() => changeOrderRevisions.id, { onDelete: "set null" }),
+    authorType: text("author_type", { enum: ["staff", "portal_contact"] }).notNull(),
+    authorId: uuid("author_id").notNull(),
+    body: text("body").notNull(),
+    readByStaffAt: timestamp("read_by_staff_at", { withTimezone: true }),
+    readByClientAt: timestamp("read_by_client_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("document_messages_change_order_idx").on(table.changeOrderId, table.createdAt)],
+);
+
+export const notificationPreferences = appSchema.table(
+  "notification_preferences",
+  {
+    userId: uuid("user_id").notNull(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+    eventType: text("event_type").notNull(),
+    email: boolean("email").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.organizationId, table.eventType] })],
+);

@@ -4,6 +4,11 @@ import { BellRing, Eye, PencilLine, Plus, TimerReset } from "lucide-react";
 import { AttachmentsPanel } from "@/components/change-orders/attachments-panel";
 import { CopyPortalLink } from "@/components/change-orders/copy-portal-link";
 import { RevisionForm } from "@/components/change-orders/revision-form";
+import { NotesPanel } from "@/components/notes/notes-panel";
+import { MessageThread } from "@/components/messages/message-thread";
+import { sendStaffMessageAction } from "@/modules/messages/actions";
+import { listThread, markThreadRead, unreadCount } from "@/modules/messages/queries";
+import { listNotes } from "@/modules/notes/queries";
 import { DocumentStatusBadge } from "@/components/change-orders/document-status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -71,6 +76,13 @@ export default async function ChangeOrderPage({ params, searchParams }: PageProp
   const canEdit = ["draft", "sent", "viewed", "changes_requested", "declined", "expired"].includes(change.revisionStatus) && can(member, change.documentKind === "offer" ? "offers.edit" : "changes.draft");
   const awaitingClient = change.revisionStatus === "sent" || change.revisionStatus === "viewed";
   const kindLabel = change.documentKind === "offer" ? "Оферта" : "Промяна";
+  const canNotes = can(member, "notes.view");
+  const showThread = !!change.frozenAt || change.revisions.some((revision) => revision.frozenAt);
+  const [thread, unreadMessages] = showThread ? await Promise.all([listThread(change.id), unreadCount(change.id, "staff")]) : [[], 0];
+  if (unreadMessages) await markThreadRead(change.id, "staff");
+  // Older versions kept one internal note each; a note carried unchanged into later versions is shown once.
+  const legacyNotes = [...new Map(change.revisions.filter((revision) => revision.internalNote).map((revision) => [revision.internalNote!, { revisionNumber: revision.revisionNumber, text: revision.internalNote! }])).values()];
+  const notes = canNotes ? await listNotes(context.organizationId, { projectId: change.projectId, changeOrderId: change.id }) : [];
   const signatureBytes = change.decision?.signatureStoragePath ? await loadSignature(change.decision.signatureStoragePath).catch(() => null) : null;
   const signatureSrc = signatureBytes ? `data:image/png;base64,${signatureBytes.toString("base64")}` : null;
   const disputed = change.disputeEvent;
@@ -183,10 +195,12 @@ export default async function ChangeOrderPage({ params, searchParams }: PageProp
         </Card>
       ) : null}
       <div id="document-tabs" className="scroll-mt-20" />
-      <Tabs key={query.tab === "edit" ? "edit" : "view"} defaultSelectedKey={eventsBefore !== undefined ? "history" : query.tab === "edit" && canEdit ? "edit" : "preview"}>
+      <Tabs key={typeof query.tab === "string" ? query.tab : "view"} defaultSelectedKey={eventsBefore !== undefined ? "history" : query.tab === "edit" && canEdit ? "edit" : query.tab === "messages" && showThread ? "messages" : query.tab === "notes" && canNotes ? "notes" : "preview"}>
         <TabsList>
           <TabsTrigger id="preview">{documentTabLabels.preview}</TabsTrigger>
           {canEdit ? <TabsTrigger id="edit">{documentTabLabels.edit}</TabsTrigger> : null}
+          {showThread ? <TabsTrigger id="messages">Разговор{thread.length ? <span className={`ml-1 rounded-full px-1.5 text-[11px] ${unreadMessages ? "bg-primary text-primary-foreground" : "bg-sidebar-accent"}`}>{unreadMessages || thread.length}</span> : null}</TabsTrigger> : null}
+          {canNotes ? <TabsTrigger id="notes">Бележки{notes.length ? <span className="ml-1 rounded-full bg-sidebar-accent px-1.5 text-[11px]">{notes.length}</span> : null}</TabsTrigger> : null}
           <TabsTrigger id="history">{documentTabLabels.history}</TabsTrigger>
         </TabsList>
         <TabsContent id="preview" className="flex flex-col gap-5 pt-5">
@@ -214,9 +228,10 @@ export default async function ChangeOrderPage({ params, searchParams }: PageProp
             initial={attachments}
             editable={canEdit && change.revisionStatus === "draft"}
           />
-          {change.internalNote && can(member, "notes.view") ? <Card><CardHeader><CardTitle>Вътрешна бележка</CardTitle></CardHeader><CardContent className="text-muted-foreground">{change.internalNote}</CardContent></Card> : null}
         </TabsContent>
         {canEdit ? <TabsContent id="edit" className="pt-5"><RevisionForm withdrawsRevision={awaitingClient ? change.revisionNumber : undefined} initial={{ id: change.id, documentKind: change.documentKind, title: change.title, description: change.description, reason: change.reason, changeKind: change.changeKind, subtotal: change.subtotal, taxRate: change.taxRate, scheduleImpactType: change.scheduleImpactType, scheduleImpactDays: change.scheduleImpactDays, agreedDeadline: change.agreedDeadline, clientNote: change.clientNote, internalNote: change.internalNote, lineItems: change.lineItems }} /></TabsContent> : null}
+        {showThread ? <TabsContent id="messages" className="pt-5"><MessageThread side="staff" messages={thread} action={sendStaffMessageAction} hidden={{ changeOrderId: change.id }} placeholder="Отговори на клиента…" emptyText="Клиентът още не е задавал въпроси. Когато попита нещо от портала, ще го видиш тук и ще получиш известие." /></TabsContent> : null}
+        {canNotes ? <TabsContent id="notes" className="pt-5"><NotesPanel projectId={change.projectId} changeOrderId={change.id} notes={notes} legacy={legacyNotes} currentUserId={context.userId} isOwner={member.role === "owner"} /></TabsContent> : null}
         <TabsContent id="history" className="flex flex-col gap-5 pt-5">
           <Card>
             <CardHeader><CardTitle>Версии</CardTitle></CardHeader>

@@ -3,7 +3,7 @@ import "server-only";
 import { and, eq, isNull, lte, sql } from "drizzle-orm";
 
 import { getDatabase } from "@/db";
-import { organizationMembers, organizations, profiles, projectMembers, staffNotifications, teamInvites, userConsents } from "@/db/schema";
+import { notificationPreferences, organizationMembers, organizations, profiles, projectMembers, staffNotifications, teamInvites, userConsents } from "@/db/schema";
 import { ACCOUNT_DELETION_GRACE_DAYS } from "@/lib/legal";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAccountDeletionPlan } from "@/modules/account/queries";
@@ -55,6 +55,7 @@ export async function purgeDueAccounts(now = new Date()) {
         .where(eq(organizationMembers.userId, account.id));
       await tx.delete(projectMembers).where(eq(projectMembers.userId, account.id));
       await tx.delete(staffNotifications).where(eq(staffNotifications.userId, account.id));
+      await tx.delete(notificationPreferences).where(eq(notificationPreferences.userId, account.id));
       await tx.delete(userConsents).where(eq(userConsents.userId, account.id));
       if (account.email) {
         await tx.update(teamInvites).set({ revokedAt: now })
@@ -67,7 +68,7 @@ export async function purgeDueAccounts(now = new Date()) {
   return result;
 }
 
-const COMPANY_BUCKETS = ["order-files", "change-attachments"];
+const COMPANY_BUCKETS = ["order-files", "change-attachments", "decision-signatures"];
 
 /** Storage has no recursive delete: list each folder under `<orgId>/` and remove what is in it. */
 async function removeCompanyFiles(admin: ReturnType<typeof createAdminClient>, organizationId: string) {

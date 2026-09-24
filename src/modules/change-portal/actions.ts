@@ -15,7 +15,6 @@ import {
   portalDecisions,
   projectMembers,
   projectReceipts,
-  staffNotifications,
   timelineEvents,
 } from "@/db/schema";
 import { escapeHtml, maskEmail, sendEmail } from "@/lib/email/send";
@@ -25,6 +24,7 @@ import { createDisputeToken, getDisputeTarget, parseDisputeToken } from "@/modul
 import { getPortalSession, isOrganizationStaff } from "@/modules/change-portal/session";
 import { checkOtp, consumeOtp, issueOtp } from "@/modules/change-portal/verification";
 import { getPdfDocumentMeta, renderChangePdf } from "@/modules/pdf/render";
+import { notifyProjectStaff, notifyUsers } from "@/modules/notifications/staff";
 import { parseSignature, removeSignature, storeSignature } from "@/modules/change-portal/signature";
 
 const decisionSchema = z.object({
@@ -203,15 +203,12 @@ async function submitDecision(
       visibility: "client",
       metadata: { typedName: data.typedName, comment: data.comment || null, signatureSha256: signature?.sha256 ?? null },
     });
-    const members = await transaction.select({ userId: organizationMembers.userId }).from(organizationMembers)
-      .leftJoin(projectMembers, and(eq(projectMembers.userId, organizationMembers.userId), eq(projectMembers.projectId, session.projectId)))
-      .where(and(eq(organizationMembers.organizationId, session.organizationId), eq(organizationMembers.status, "active"), or(eq(organizationMembers.role, "owner"), eq(organizationMembers.allProjects, true), eq(projectMembers.projectId, session.projectId))));
-    const recipients = [...new Set(members.map((member) => member.userId))];
-    if (recipients.length) await transaction.insert(staffNotifications).values(recipients.map((userId) => ({
-      organizationId: session.organizationId, projectId: session.projectId, userId,
-      eventType: `decision_${data.decision}`, title: data.decision === "approved" ? "Клиентът одобри документ" : data.decision === "declined" ? "Клиентът отказа документ" : "Клиентът поиска промяна",
+    await notifyProjectStaff(transaction, {
+      organizationId: session.organizationId, projectId: session.projectId,
+      eventType: `decision_${data.decision}`,
+      title: `${data.decision === "approved" ? "Клиентът одобри" : data.decision === "declined" ? "Клиентът отказа" : "Клиентът поиска промяна по"} „${revision.title}“`,
       body: data.comment || null, href: `/app/offers/${data.changeOrderId}`,
-    })));
+    });
     return inserted.id;
   });
 }
@@ -240,14 +237,10 @@ export async function disputeDecisionAction(_: DecisionState, formData: FormData
         visibility: "client",
         metadata: { decisionId, reason: data.data.reason || null, ip },
       });
-      const owners = await tx.select({ userId: organizationMembers.userId }).from(organizationMembers)
-        .leftJoin(projectMembers, and(eq(projectMembers.userId, organizationMembers.userId), eq(projectMembers.projectId, target.projectId)))
-        .where(and(eq(organizationMembers.organizationId, target.organizationId), eq(organizationMembers.status, "active"), or(eq(organizationMembers.role, "owner"), eq(organizationMembers.allProjects, true), eq(projectMembers.projectId, target.projectId))));
-      const recipients = [...new Set(owners.map((owner) => owner.userId))];
-      if (recipients.length) await tx.insert(staffNotifications).values(recipients.map((userId) => ({
-        organizationId: target.organizationId, projectId: target.projectId, userId,
+      await notifyProjectStaff(tx, {
+        organizationId: target.organizationId, projectId: target.projectId,
         eventType: "decision_disputed", title: "Клиентът оспори решение", body: data.data.reason || "Клиентът твърди, че не е взел това решение.", href: `/app/offers/${target.changeOrderId}`,
-      })));
+      });
     });
     revalidatePath(`/app/offers/${target.changeOrderId}`);
     revalidatePath("/app/notifications");
@@ -322,7 +315,7 @@ export async function disputePaymentAction(formData: FormData) {
     const handlers = await tx.select({ userId: organizationMembers.userId }).from(organizationMembers)
       .leftJoin(projectMembers, and(eq(projectMembers.userId, organizationMembers.userId), eq(projectMembers.projectId, session.projectId)))
       .where(and(eq(organizationMembers.organizationId, session.organizationId), eq(organizationMembers.status, "active"), or(eq(organizationMembers.role, "owner"), and(sql`'payments.record' = any(${organizationMembers.permissions})`, or(eq(organizationMembers.allProjects, true), eq(projectMembers.projectId, session.projectId))))));
-    if (handlers.length) await tx.insert(staffNotifications).values([...new Set(handlers.map((handler) => handler.userId))].map((userId) => ({ organizationId: session.organizationId, projectId: session.projectId, userId, eventType: "payment_disputed", title: "Клиент оспори плащане", body: data.reason, href: `/app/projects/${session.projectId}` })));
+    await notifyUsers(tx, handlers.map((handler) => handler.userId), { organizationId: session.organizationId, projectId: session.projectId, eventType: "payment_disputed", title: "Клиент оспори плащане", body: data.reason, href: `/app/projects/${session.projectId}` });
   });
   revalidatePath(`/portal/${data.projectPublicId}`);
   redirect(`/portal/${data.projectPublicId}?payment=disputed`);
