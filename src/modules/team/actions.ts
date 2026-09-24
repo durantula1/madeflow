@@ -10,13 +10,16 @@ import {
   organizationMembers, ownerRoleRequests, profiles, projectMembers,
   projects, staffNotifications, teamInvites,
 } from "@/db/schema";
+import { PERMISSION_KEYS, PRESETS, presetOf, sortPermissions } from "@/lib/authz/permissions";
 import { requireOwner } from "@/lib/authz/project-access";
 import { requireTenantContext } from "@/lib/authz/tenant-context";
 import { createPortalToken, hashPortalToken } from "@/lib/crypto/portal-token";
+import { escapeHtml, maskEmail, sendEmail } from "@/lib/email/send";
 import { getPublicEnvironment } from "@/lib/env/public";
 import { createClient } from "@/lib/supabase/server";
 
-const memberRoles = z.enum(["owner", "office", "field"]);
+export type InviteState = { error?: string; link?: string; sentTo?: string; emailError?: string };
+export type MemberAccessState = { error?: string; savedAt?: number };
 
 async function checkedProjectIds(organizationId: string, values: FormDataEntryValue[]) {
   const ids = z.array(z.uuid()).parse(values.map(String));
@@ -27,27 +30,68 @@ async function checkedProjectIds(organizationId: string, values: FormDataEntryVa
   return [...new Set(ids)];
 }
 
-export async function createTeamInviteAction(formData: FormData) {
-  const context = await requireTenantContext();
-  await requireOwner(context);
-  const email = z.email().parse(formData.get("email")).trim().toLowerCase();
-  const role = memberRoles.parse(formData.get("role"));
-  const canRecordPayments = role !== "owner" && formData.get("canRecordPayments") === "on";
-  const projectIds = role === "owner" ? [] : await checkedProjectIds(context.organizationId, formData.getAll("projectIds"));
-  const db = getDatabase();
-  if (role === "owner") {
-    const owners = await db.select({ userId: organizationMembers.userId }).from(organizationMembers)
-      .where(and(eq(organizationMembers.organizationId, context.organizationId), eq(organizationMembers.role, "owner"), eq(organizationMembers.status, "active")));
-    if (owners.length !== 1) throw new Error("Нов owner се добавя чрез предложение и потвърждение от втори owner.");
+async function projectScope(organizationId: string, formData: FormData) {
+  const allProjects = formData.get("scope") === "all";
+  return { allProjects, projectIds: allProjects ? [] : await checkedProjectIds(organizationId, formData.getAll("projectIds")) };
+}
+
+function errorMessage(error: unknown) {
+  if (error instanceof z.ZodError) return "Провери въведените данни.";
+  return error instanceof Error ? error.message : "Действието не беше завършено.";
+}
+
+export async function createTeamInviteAction(_: InviteState, formData: FormData): Promise<InviteState> {
+  try {
+    const context = await requireTenantContext();
+    await requireOwner(context);
+    const email = z.email("Невалиден имейл.").parse(String(formData.get("email") ?? "").trim().toLowerCase());
+    const preset = z.enum(["field", "office", "owner"]).parse(formData.get("preset"));
+    const scope = preset === "owner" ? { allProjects: false, projectIds: [] } : await projectScope(context.organizationId, formData);
+    const db = getDatabase();
+    if (preset === "owner") {
+      const owners = await db.select({ userId: organizationMembers.userId }).from(organizationMembers)
+        .where(and(eq(organizationMembers.organizationId, context.organizationId), eq(organizationMembers.role, "owner"), eq(organizationMembers.status, "active")));
+      if (owners.length !== 1) return { error: "Нов собственик се добавя чрез предложение и потвърждение от втори собственик." };
+    }
+    const [existing] = await db.select({ userId: organizationMembers.userId }).from(organizationMembers)
+      .innerJoin(profiles, eq(profiles.id, organizationMembers.userId))
+      .where(and(eq(organizationMembers.organizationId, context.organizationId), eq(organizationMembers.status, "active"), eq(profiles.email, email))).limit(1);
+    if (existing) return { error: "Този човек вече е в екипа." };
+    const [inviter] = await db.select({ displayName: profiles.displayName }).from(profiles).where(eq(profiles.id, context.userId)).limit(1);
+    const token = createPortalToken();
+    const expiresAt = new Date(Date.now() + 7 * 86400000);
+    await db.transaction(async (tx) => {
+      await tx.update(teamInvites).set({ revokedAt: new Date() })
+        .where(and(eq(teamInvites.organizationId, context.organizationId), eq(teamInvites.email, email), isNull(teamInvites.acceptedAt), isNull(teamInvites.revokedAt)));
+      await tx.insert(teamInvites).values({
+        organizationId: context.organizationId, email, role: preset,
+        permissions: preset === "owner" ? [] : [...PRESETS[preset].permissions],
+        allProjects: scope.allProjects, projectIds: scope.projectIds,
+        tokenHash: token.tokenHash, createdBy: context.userId, expiresAt,
+      });
+    });
+    revalidatePath("/app/team");
+    const link = `${getPublicEnvironment().NEXT_PUBLIC_APP_URL}/join/${token.token}`;
+    try {
+      await sendInviteEmail({ to: email, link, organizationName: context.organizationName, inviterName: inviter?.displayName ?? null, roleLabel: preset === "owner" ? "Собственик" : PRESETS[preset].label, expiresAt });
+      return { link, sentTo: maskEmail(email) };
+    } catch (error) {
+      return { link, emailError: errorMessage(error) };
+    }
+  } catch (error) {
+    return { error: errorMessage(error) };
   }
-  const token = createPortalToken();
-  await db.insert(teamInvites).values({
-    organizationId: context.organizationId, email, role, canRecordPayments, projectIds,
-    tokenHash: token.tokenHash, createdBy: context.userId,
-    expiresAt: new Date(Date.now() + 7 * 86400000),
+}
+
+async function sendInviteEmail(input: { to: string; link: string; organizationName: string; inviterName: string | null; roleLabel: string; expiresAt: Date }) {
+  const who = input.inviterName ? `${input.inviterName} от ${input.organizationName}` : input.organizationName;
+  const until = input.expiresAt.toLocaleDateString("bg-BG", { timeZone: "Europe/Sofia" });
+  await sendEmail({
+    to: input.to,
+    subject: `${input.organizationName} те кани в MadeFlow`,
+    text: `Здравей!\n\n${who} те кани в екипа в MadeFlow като „${input.roleLabel}“.\n\nПриеми поканата: ${input.link}\n\nЛинкът е валиден до ${until} и работи само с профил на ${input.to}.`,
+    html: `<div style="font-family:system-ui,sans-serif;max-width:520px;color:#102b38"><p>Здравей!</p><p>${escapeHtml(who)} те кани в екипа в MadeFlow като <strong>${escapeHtml(input.roleLabel)}</strong>.</p><p><a href="${input.link}" style="display:inline-block;padding:12px 20px;border-radius:10px;background:#ff765f;color:#102b38;text-decoration:none;font-weight:600">Приеми поканата</a></p><p style="color:#5b6b70;font-size:14px">Линкът е валиден до ${until} и работи само с профил на ${escapeHtml(input.to)}. Ако не очакваш тази покана, игнорирай имейла.</p></div>`,
   });
-  revalidatePath("/app/team");
-  redirect(`/app/team?invite=${encodeURIComponent(`${getPublicEnvironment().NEXT_PUBLIC_APP_URL}/join/${token.token}`)}&notice=invite-created`);
 }
 
 export async function acceptTeamInviteAction(formData: FormData) {
@@ -67,17 +111,16 @@ export async function acceptTeamInviteAction(formData: FormData) {
     if (invite.role === "owner") {
       const owners = await tx.select({ id: organizationMembers.userId }).from(organizationMembers)
         .where(and(eq(organizationMembers.organizationId, invite.organizationId), eq(organizationMembers.role, "owner"), eq(organizationMembers.status, "active")));
-      if (owners.length !== 1) throw new Error("Поканата за owner вече изисква потвърждение от втори owner.");
+      if (owners.length !== 1) throw new Error("Поканата за собственик вече изисква потвърждение от втори собственик.");
     }
     const displayName = String(user.user_metadata?.display_name ?? user.email!.split("@")[0]);
     await tx.insert(profiles).values({ id: user.id, displayName, email: user.email!.toLowerCase() })
       .onConflictDoUpdate({ target: profiles.id, set: { email: user.email!.toLowerCase() } });
-    await tx.insert(organizationMembers).values({ organizationId: invite.organizationId, userId: user.id, role: invite.role, status: "active", canRecordPayments: invite.canRecordPayments })
-      .onConflictDoUpdate({ target: [organizationMembers.organizationId, organizationMembers.userId], set: { role: invite.role, status: "active", canRecordPayments: invite.canRecordPayments } });
-    if (invite.role !== "owner") {
-      for (const projectId of invite.projectIds) await tx.insert(projectMembers)
-        .values({ projectId, userId: user.id, permission: invite.role === "office" ? "manage" : "draft" })
-        .onConflictDoUpdate({ target: [projectMembers.projectId, projectMembers.userId], set: { permission: invite.role === "office" ? "manage" : "draft" } });
+    const access = { role: invite.role, status: "active" as const, permissions: invite.permissions, allProjects: invite.allProjects };
+    await tx.insert(organizationMembers).values({ organizationId: invite.organizationId, userId: user.id, ...access })
+      .onConflictDoUpdate({ target: [organizationMembers.organizationId, organizationMembers.userId], set: access });
+    if (invite.role !== "owner" && !invite.allProjects && invite.projectIds.length) {
+      await tx.insert(projectMembers).values(invite.projectIds.map((projectId) => ({ projectId, userId: user.id, permission: "view" as const }))).onConflictDoNothing();
     }
     await tx.update(teamInvites).set({ acceptedAt: new Date() }).where(eq(teamInvites.id, invite.id));
     await tx.insert(staffNotifications).values({ organizationId: invite.organizationId, userId: user.id, eventType: "invitation_accepted", title: "Добре дошъл в екипа", href: "/app" });
@@ -86,25 +129,31 @@ export async function acceptTeamInviteAction(formData: FormData) {
   redirect("/app");
 }
 
-export async function updateTeamMemberAction(formData: FormData) {
-  const context = await requireTenantContext();
-  await requireOwner(context);
-  const userId = z.uuid().parse(formData.get("userId"));
-  const role = z.enum(["office", "field"]).parse(formData.get("role"));
-  const projectIds = await checkedProjectIds(context.organizationId, formData.getAll("projectIds"));
-  const canRecordPayments = formData.get("canRecordPayments") === "on";
-  const db = getDatabase();
-  await db.transaction(async (tx) => {
-    const [target] = await tx.select({ role: organizationMembers.role }).from(organizationMembers)
-      .where(and(eq(organizationMembers.organizationId, context.organizationId), eq(organizationMembers.userId, userId), eq(organizationMembers.status, "active"))).limit(1);
-    if (!target || target.role === "owner") throw new Error("Owner роля се променя с второ потвърждение.");
-    await tx.update(organizationMembers).set({ role, canRecordPayments }).where(and(eq(organizationMembers.organizationId, context.organizationId), eq(organizationMembers.userId, userId)));
-    const orgProjects = await tx.select({ id: projects.id }).from(projects).where(eq(projects.organizationId, context.organizationId));
-    if (orgProjects.length) await tx.delete(projectMembers).where(and(eq(projectMembers.userId, userId), inArray(projectMembers.projectId, orgProjects.map((item) => item.id))));
-    if (projectIds.length) await tx.insert(projectMembers).values(projectIds.map((projectId) => ({ projectId, userId, permission: role === "office" ? "manage" as const : "draft" as const })));
-    await tx.insert(staffNotifications).values({ organizationId: context.organizationId, userId, eventType: "permissions_changed", title: "Правата ти са променени", href: "/app/projects" });
-  });
-  revalidatePath("/app/team");
+export async function updateTeamMemberAction(_: MemberAccessState, formData: FormData): Promise<MemberAccessState> {
+  try {
+    const context = await requireTenantContext();
+    await requireOwner(context);
+    const userId = z.uuid().parse(formData.get("userId"));
+    const permissions = sortPermissions(z.array(z.enum(PERMISSION_KEYS)).parse(formData.getAll("permissions").map(String)));
+    const scope = await projectScope(context.organizationId, formData);
+    const role = presetOf(permissions) === "field" ? "field" as const : "office" as const;
+    await getDatabase().transaction(async (tx) => {
+      const [target] = await tx.select({ role: organizationMembers.role }).from(organizationMembers)
+        .where(and(eq(organizationMembers.organizationId, context.organizationId), eq(organizationMembers.userId, userId), eq(organizationMembers.status, "active"))).for("update").limit(1);
+      if (!target || target.role === "owner") throw new Error("Собственикът има пълен достъп. Ролята му се сменя с второ потвърждение.");
+      await tx.update(organizationMembers).set({ role, permissions, allProjects: scope.allProjects })
+        .where(and(eq(organizationMembers.organizationId, context.organizationId), eq(organizationMembers.userId, userId)));
+      const orgProjects = await tx.select({ id: projects.id }).from(projects).where(eq(projects.organizationId, context.organizationId));
+      if (orgProjects.length) await tx.delete(projectMembers).where(and(eq(projectMembers.userId, userId), inArray(projectMembers.projectId, orgProjects.map((item) => item.id))));
+      if (scope.projectIds.length) await tx.insert(projectMembers).values(scope.projectIds.map((projectId) => ({ projectId, userId, permission: "view" as const })));
+      await tx.insert(staffNotifications).values({ organizationId: context.organizationId, userId, eventType: "permissions_changed", title: "Правата ти са променени", href: "/app/projects" });
+    });
+    revalidatePath("/app/team");
+    revalidatePath(`/app/team/${userId}`);
+    return { savedAt: Date.now() };
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
 }
 
 export async function disableTeamMemberAction(formData: FormData) {
@@ -115,13 +164,14 @@ export async function disableTeamMemberAction(formData: FormData) {
     const [member] = await tx.select({ role: organizationMembers.role }).from(organizationMembers)
       .where(and(eq(organizationMembers.organizationId, context.organizationId), eq(organizationMembers.userId, userId), eq(organizationMembers.status, "active"))).for("update").limit(1);
     if (!member || member.role === "owner") throw new Error("Owner се премахва с второ потвърждение.");
-    await tx.update(organizationMembers).set({ status: "disabled", canRecordPayments: false })
+    await tx.update(organizationMembers).set({ status: "disabled", permissions: [], allProjects: false })
       .where(and(eq(organizationMembers.organizationId, context.organizationId), eq(organizationMembers.userId, userId)));
     const assigned = await tx.select({ id: projects.id }).from(projects).where(eq(projects.organizationId, context.organizationId));
     if (assigned.length) await tx.delete(projectMembers).where(and(eq(projectMembers.userId, userId), inArray(projectMembers.projectId, assigned.map((item) => item.id))));
     await tx.insert(staffNotifications).values({ organizationId: context.organizationId, userId, eventType: "membership_disabled", title: "Достъпът ти до фирмата е отнет", href: "/app" });
   });
   revalidatePath("/app/team");
+  revalidatePath(`/app/team/${userId}`);
 }
 
 export async function revokeTeamInviteAction(formData: FormData) {
@@ -151,7 +201,7 @@ export async function requestOwnerChangeAction(formData: FormData) {
       .where(and(eq(organizationMembers.organizationId, context.organizationId), eq(organizationMembers.role, "owner"), eq(organizationMembers.status, "active")));
     if (target.role === "owner" && owners.length < 2) throw new Error("Фирмата трябва да има поне един owner.");
     if (requestedRole === "owner" && owners.length === 1) {
-      await tx.update(organizationMembers).set({ role: "owner", canRecordPayments: false }).where(and(eq(organizationMembers.organizationId, context.organizationId), eq(organizationMembers.userId, targetUserId)));
+      await tx.update(organizationMembers).set({ role: "owner", permissions: [], allProjects: false }).where(and(eq(organizationMembers.organizationId, context.organizationId), eq(organizationMembers.userId, targetUserId)));
       await tx.insert(staffNotifications).values({ organizationId: context.organizationId, userId: targetUserId, eventType: "owner_promoted", title: "Вече си owner", href: "/app/team" });
       return;
     }
@@ -179,7 +229,7 @@ export async function approveOwnerChangeAction(formData: FormData) {
     const owners = await tx.select({ userId: organizationMembers.userId }).from(organizationMembers)
       .where(and(eq(organizationMembers.organizationId, context.organizationId), eq(organizationMembers.role, "owner"), eq(organizationMembers.status, "active")));
     if ((request.removeMember || request.requestedRole !== "owner") && owners.some((owner) => owner.userId === request.targetUserId) && owners.length < 2) throw new Error("Фирмата трябва да има owner.");
-    await tx.update(organizationMembers).set(request.removeMember ? { status: "disabled", canRecordPayments: false } : { role: request.requestedRole!, canRecordPayments: false })
+    await tx.update(organizationMembers).set(request.removeMember ? { status: "disabled", permissions: [], allProjects: false } : request.requestedRole === "owner" ? { role: "owner", permissions: [], allProjects: false } : { role: request.requestedRole!, permissions: [...PRESETS[request.requestedRole === "field" ? "field" : "office"].permissions], allProjects: true })
       .where(and(eq(organizationMembers.organizationId, context.organizationId), eq(organizationMembers.userId, request.targetUserId), eq(organizationMembers.status, "active")));
     await tx.update(ownerRoleRequests).set({ status: "approved", approvedBy: context.userId, resolvedAt: new Date() }).where(eq(ownerRoleRequests.id, request.id));
     await tx.insert(staffNotifications).values({ organizationId: context.organizationId, userId: request.targetUserId, eventType: "owner_role_changed", title: "Ролята ти е променена", href: "/app/team" });

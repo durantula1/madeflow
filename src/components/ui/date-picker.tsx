@@ -1,0 +1,59 @@
+"use client";
+
+import { useState } from "react";
+import { parseDate, type DateValue } from "@internationalized/date";
+import { CalendarIcon } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverTrigger } from "@/components/ui/popover";
+
+function formatDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Intl.DateTimeFormat("bg-BG", { dateStyle: "medium" }).format(new Date(year, month - 1, day));
+}
+
+export function DatePicker({
+  name,
+  id,
+  value,
+  defaultValue = "",
+  onChange,
+  required,
+  "aria-label": ariaLabel,
+}: {
+  name?: string;
+  id?: string;
+  value?: string;
+  defaultValue?: string;
+  onChange?: (value: string) => void;
+  required?: boolean;
+  "aria-label"?: string;
+}) {
+  const [internal, setInternal] = useState(defaultValue);
+  const [open, setOpen] = useState(false);
+  const current = value ?? internal;
+  const selected = current ? parseDate(current) : null;
+
+  function commit(next: DateValue) {
+    const iso = next.toString();
+    setInternal(iso);
+    onChange?.(iso);
+    setOpen(false);
+  }
+
+  return (
+    <>
+      {name ? <input type="hidden" name={name} value={current} required={required} /> : null}
+      <PopoverTrigger isOpen={open} onOpenChange={setOpen}>
+        <Button id={id} type="button" variant="outline" aria-label={ariaLabel} aria-required={required} className="w-full justify-start font-normal">
+          <CalendarIcon data-icon="inline-start" />
+          {current ? formatDate(current) : "Избери дата"}
+        </Button>
+        <Popover className="w-auto p-0">
+          <Calendar aria-label={ariaLabel ?? "Дата"} value={selected} onChange={commit} />
+        </Popover>
+      </PopoverTrigger>
+    </>
+  );
+}

@@ -12,6 +12,7 @@ import {
   timelineEvents,
 } from "@/db/schema";
 import { hashPortalToken } from "@/lib/crypto/portal-token";
+import { clientIp } from "@/lib/http/client-ip";
 import { PORTAL_COOKIE } from "@/modules/change-portal/session";
 
 export async function GET(
@@ -51,6 +52,7 @@ export async function GET(
       portalGrantId: grant.id,
       sessionHash: hashPortalToken(sessionSecret),
       expiresAt,
+      createdIp: clientIp(request.headers),
       userAgent: request.headers.get("user-agent"),
     });
     await transaction

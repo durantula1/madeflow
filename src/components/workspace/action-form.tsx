@@ -18,7 +18,13 @@ export function ActionForm({ action, success, children, className, redirects = f
   async function submit(formData: FormData) {
     setError(null);
     try {
-      await action(formData);
+      const result = await action(formData);
+      // Expected failures come back as `{ error }`: production builds hide thrown messages.
+      if (result && typeof result === "object" && "error" in result && typeof result.error === "string") {
+        setError(result.error);
+        toast.error(result.error);
+        return;
+      }
       if (!redirects) toast.success(success);
     } catch (cause) {
       if (cause instanceof Error && cause.message.includes("NEXT_REDIRECT")) throw cause;

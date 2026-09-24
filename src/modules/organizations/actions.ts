@@ -16,7 +16,7 @@ export type OnboardingState = { error?: string };
 const onboardingSchema = z.object({
   displayName: z.string().trim().min(2).max(100),
   organizationName: z.string().trim().min(2).max(120),
-  currency: z.enum(["EUR", "BGN"]),
+  currency: z.literal("EUR").default("EUR"),
 });
 
 export async function completeOnboardingAction(
@@ -44,4 +44,11 @@ export async function completeOnboardingAction(
   redirect("/app");
 }
 
-export async function updateOrganizationAction(formData:FormData){const data=z.object({name:z.string().trim().min(2).max(120),orderNumberPrefix:z.string().trim().min(1).max(12).regex(/^[A-Za-z0-9-]+$/),defaultCurrency:z.enum(["EUR","BGN"]),brandColor:z.union([z.literal(""),z.string().regex(/^#[0-9a-fA-F]{6}$/)])}).parse(Object.fromEntries(formData));const context=await requireTenantContext();requireRole(context,["owner"]);await getDatabase().update(organizations).set({name:data.name,orderNumberPrefix:data.orderNumberPrefix.toUpperCase(),defaultCurrency:data.defaultCurrency,brandColor:data.brandColor||null}).where(eq(organizations.id,context.organizationId));revalidatePath("/app/settings");revalidatePath("/app","layout");}
+export async function updateOrganizationAction(formData: FormData) {
+  const name = z.string().trim().min(2, "Името трябва да е поне 2 символа.").max(120).safeParse(formData.get("name"));
+  if (!name.success) return { error: name.error.issues[0]?.message };
+  const context = await requireTenantContext();
+  requireRole(context, ["owner"]);
+  await getDatabase().update(organizations).set({ name: name.data, updatedAt: new Date() }).where(eq(organizations.id, context.organizationId));
+  revalidatePath("/app", "layout");
+}

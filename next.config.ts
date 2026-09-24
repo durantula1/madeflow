@@ -12,9 +12,16 @@ const nextConfig: NextConfig = {
   },
   outputFileTracingIncludes: {
     "/api/changes/[changeOrderId]/pdf": [
-      "./node_modules/@fontsource/noto-sans/files/noto-sans-cyrillic-ext-400-normal.woff",
-      "./node_modules/@fontsource/noto-sans/files/noto-sans-cyrillic-ext-600-normal.woff",
+      "./src/modules/pdf/fonts/NotoSans-Regular.ttf",
+      "./src/modules/pdf/fonts/NotoSans-SemiBold.ttf",
     ],
+  },
+  async redirects() {
+    return [
+      { source: "/app/changes/new", destination: "/app/offers/changes/new", permanent: true },
+      { source: "/app/changes/:id", destination: "/app/offers/:id", permanent: true },
+      { source: "/app/changes", destination: "/app/offers", permanent: true },
+    ];
   },
   async headers() {
     const portalHeaders = [

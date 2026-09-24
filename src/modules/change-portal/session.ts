@@ -5,12 +5,14 @@ import { and, eq, gt, isNull, or } from "drizzle-orm";
 
 import { getDatabase } from "@/db";
 import {
+  organizationMembers,
   portalGrants,
   portalSessions,
   projectContacts,
   projects,
 } from "@/db/schema";
 import { hashPortalToken } from "@/lib/crypto/portal-token";
+import { createClient } from "@/lib/supabase/server";
 
 export const PORTAL_COOKIE = "sitechange_portal";
 
@@ -32,6 +34,8 @@ export async function getPortalSession(projectPublicId: string) {
       contactId: projectContacts.id,
       contactName: projectContacts.name,
       contactRole: projectContacts.portalRole,
+      contactEmail: projectContacts.email,
+      contactEmailVerifiedAt: projectContacts.emailVerifiedAt,
     })
     .from(portalSessions)
     .innerJoin(portalGrants, eq(portalGrants.id, portalSessions.portalGrantId))
@@ -53,4 +57,14 @@ export async function getPortalSession(projectPublicId: string) {
     .limit(1);
 
   return session ?? null;
+}
+
+export async function isOrganizationStaff(organizationId: string) {
+  const { data } = await (await createClient()).auth.getClaims();
+  const userId = data?.claims?.sub;
+  if (!userId) return false;
+  const [member] = await getDatabase().select({ userId: organizationMembers.userId }).from(organizationMembers)
+    .where(and(eq(organizationMembers.organizationId, organizationId), eq(organizationMembers.userId, userId), eq(organizationMembers.status, "active")))
+    .limit(1);
+  return !!member;
 }

@@ -14,25 +14,22 @@ function Checkbox({ className, children, ...props }: CheckboxProps) {
     <CheckboxPrimitive
       data-slot="checkbox"
       className={cn(
-        "peer relative flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-input transition-colors outline-none group-has-disabled/field:opacity-50 after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 aria-invalid:aria-checked:border-primary data-focus-visible:border-ring data-focus-visible:ring-3 data-focus-visible:ring-ring/50 data-invalid:border-destructive data-invalid:ring-3 data-invalid:ring-destructive/20 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50 dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 dark:data-invalid:border-destructive/50 dark:data-invalid:ring-destructive/40 data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground dark:data-checked:bg-primary data-selected:border-primary data-selected:bg-primary data-selected:text-primary-foreground data-invalid:data-selected:border-primary dark:data-selected:bg-primary",
+        "group/checkbox flex items-start gap-2 text-sm leading-5 outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50",
         className
       )}
       {...props}
     >
       {composeRenderProps(
         children,
-        (children, { isSelected, isIndeterminate }) => (
+        (label, { isSelected, isIndeterminate }) => (
           <>
             <span
               data-slot="checkbox-indicator"
-              className="grid place-content-center text-current transition-none [&>svg]:size-3.5"
+              className="mt-0.5 grid size-4 shrink-0 place-content-center rounded-[4px] border border-input text-current transition-colors group-data-focus-visible/checkbox:border-ring group-data-focus-visible/checkbox:ring-3 group-data-focus-visible/checkbox:ring-ring/50 group-data-invalid/checkbox:border-destructive group-data-selected/checkbox:border-primary group-data-selected/checkbox:bg-primary group-data-selected/checkbox:text-primary-foreground group-data-checked/checkbox:border-primary group-data-checked/checkbox:bg-primary group-data-checked/checkbox:text-primary-foreground [&>svg]:size-3.5"
             >
-              {(isSelected || isIndeterminate) && (
-                <CheckIcon
-                />
-              )}
+              {(isSelected || isIndeterminate) && <CheckIcon />}
             </span>
-            {children}
+            {label ? <span className="min-w-0">{label}</span> : null}
           </>
         )
       )}

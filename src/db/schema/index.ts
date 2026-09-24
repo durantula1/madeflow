@@ -28,6 +28,17 @@ export const memberRole = appSchema.enum("member_role", [
   "field",
   "office",
 ]);
+export const memberPermission = appSchema.enum("member_permission", [
+  "projects.create",
+  "milestones.manage",
+  "offers.edit",
+  "changes.draft",
+  "documents.send",
+  "drafts.view_all",
+  "notes.view",
+  "payments.record",
+  "finance.view",
+]);
 export const memberStatus = appSchema.enum("member_status", [
   "active",
   "invited",
@@ -135,8 +146,26 @@ export const profiles = appSchema.table("profiles", {
   displayName: text("display_name").notNull(),
   email: text("email"),
   phone: text("phone"),
+  /** Set when the user asks to delete the account; the purge job runs after the grace period. */
+  deletionRequestedAt: timestamp("deletion_requested_at", { withTimezone: true }),
+  /** Set once the auth user is gone and the row is anonymized. */
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
   ...timestamps,
-});
+}, (table) => [
+  index("profiles_deletion_due_idx").on(table.deletionRequestedAt).where(sql`${table.deletionRequestedAt} is not null and ${table.deletedAt} is null`),
+]);
+
+export const userConsents = appSchema.table(
+  "user_consents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull(),
+    document: text("document", { enum: ["terms", "privacy"] }).notNull(),
+    version: text("version").notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("user_consents_user_document_version_uidx").on(table.userId, table.document, table.version)],
+);
 
 export const organizations = appSchema.table(
   "organizations",
@@ -162,6 +191,8 @@ export const organizations = appSchema.table(
       precision: 14,
       scale: 2,
     }),
+    /** Set when the sole member deletes their account; app.purge_organization() removes the company later. */
+    closureRequestedAt: timestamp("closure_requested_at", { withTimezone: true }),
     ...timestamps,
   },
   (table) => [uniqueIndex("organizations_slug_uidx").on(table.slug)],
@@ -176,7 +207,8 @@ export const organizationMembers = appSchema.table(
     userId: uuid("user_id").notNull(),
     role: memberRole("role").notNull(),
     status: memberStatus("status").notNull().default("active"),
-    canRecordPayments: boolean("can_record_payments").notNull().default(false),
+    permissions: memberPermission("permissions").array().notNull().default([]),
+    allProjects: boolean("all_projects").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -905,6 +937,9 @@ export const projects = appSchema.table(
       table.status,
       table.updatedAt,
     ),
+    index("projects_org_updated_active_idx")
+      .on(table.organizationId, table.updatedAt.desc())
+      .where(sql`${table.archivedAt} is null`),
   ],
 );
 
@@ -938,6 +973,8 @@ export const projectContacts = appSchema.table(
     phone: text("phone"),
     portalRole: portalContactRole("portal_role").notNull().default("approver"),
     isPrimary: boolean("is_primary").notNull().default(true),
+    emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -1044,6 +1081,12 @@ export const changeOrders = appSchema.table(
       table.updatedAt,
     ),
     index("change_orders_org_idx").on(table.organizationId),
+    index("change_orders_org_kind_updated_idx")
+      .on(table.organizationId, table.documentKind, table.updatedAt.desc())
+      .where(sql`${table.archivedAt} is null`),
+    index("change_orders_project_kind_updated_idx")
+      .on(table.projectId, table.documentKind, table.updatedAt.desc())
+      .where(sql`${table.archivedAt} is null`),
   ],
 );
 
@@ -1130,11 +1173,15 @@ export const changeAttachments = appSchema.table(
     projectId: uuid("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "restrict" }),
+    changeOrderId: uuid("change_order_id")
+      .notNull()
+      .references(() => changeOrders.id, { onDelete: "restrict" }),
     revisionId: bigint("revision_id", { mode: "number" }).references(
       () => changeOrderRevisions.id,
       { onDelete: "restrict" },
     ),
     storagePath: text("storage_path").notNull(),
+    originalName: text("original_name").notNull(),
     kind: attachmentKind("kind").notNull(),
     mimeType: text("mime_type").notNull(),
     byteSize: bigint("byte_size", { mode: "number" }).notNull(),
@@ -1147,9 +1194,49 @@ export const changeAttachments = appSchema.table(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex("change_attachments_storage_path_uidx").on(table.storagePath),
+    uniqueIndex("change_attachments_revision_path_uidx").on(table.revisionId, table.storagePath),
+    index("change_attachments_change_order_idx").on(table.changeOrderId),
     index("change_attachments_revision_idx").on(table.revisionId),
     index("change_attachments_project_idx").on(table.projectId),
+  ],
+);
+
+export const portalOtps = appSchema.table(
+  "portal_otps",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    portalSessionId: bigint("portal_session_id", { mode: "number" })
+      .notNull()
+      .references(() => portalSessions.id, { onDelete: "cascade" }),
+    projectContactId: uuid("project_contact_id")
+      .notNull()
+      .references(() => projectContacts.id, { onDelete: "cascade" }),
+    purpose: text("purpose")
+      .$type<"claim" | "email_change" | "decision">()
+      .notNull(),
+    revisionId: bigint("revision_id", { mode: "number" }).references(
+      () => changeOrderRevisions.id,
+      { onDelete: "cascade" },
+    ),
+    decision: changeDecision("decision"),
+    email: text("email").notNull(),
+    targetEmail: text("target_email"),
+    codeHash: text("code_hash").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdIp: inet("created_ip"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("portal_otps_contact_created_idx").on(
+      table.projectContactId,
+      table.createdAt,
+    ),
+    index("portal_otps_session_idx").on(table.portalSessionId),
+    index("portal_otps_revision_idx").on(table.revisionId),
   ],
 );
 
@@ -1174,6 +1261,10 @@ export const portalDecisions = appSchema.table(
     consentTextVersion: text("consent_text_version").notNull(),
     revisionContentHash: text("revision_content_hash").notNull(),
     idempotencyKey: uuid("idempotency_key").notNull(),
+    otpId: uuid("otp_id").references(() => portalOtps.id, {
+      onDelete: "restrict",
+    }),
+    verifiedEmail: text("verified_email"),
     ip: inet("ip"),
     userAgent: text("user_agent"),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -1183,6 +1274,7 @@ export const portalDecisions = appSchema.table(
   (table) => [
     uniqueIndex("portal_decisions_idempotency_uidx").on(table.idempotencyKey),
     uniqueIndex("portal_decisions_revision_uidx").on(table.revisionId),
+    uniqueIndex("portal_decisions_otp_uidx").on(table.otpId),
     index("portal_decisions_contact_idx").on(table.projectContactId),
     index("portal_decisions_session_idx").on(table.portalSessionId),
   ],
@@ -1225,7 +1317,7 @@ export const timelineEvents = appSchema.table(
       table.createdAt,
       table.id,
     ),
-    index("timeline_change_idx").on(table.changeOrderId),
+    index("timeline_change_created_idx").on(table.changeOrderId, table.createdAt, table.id),
     index("timeline_revision_idx").on(table.revisionId),
   ],
 );
@@ -1237,7 +1329,8 @@ export const teamInvites = appSchema.table(
     organizationId: uuid("organization_id").notNull().references(() => organizations.id),
     email: text("email").notNull(),
     role: memberRole("role").notNull(),
-    canRecordPayments: boolean("can_record_payments").notNull().default(false),
+    permissions: memberPermission("permissions").array().notNull().default([]),
+    allProjects: boolean("all_projects").notNull().default(false),
     projectIds: uuid("project_ids").array().notNull().default([]),
     tokenHash: text("token_hash").notNull(),
     createdBy: uuid("created_by").notNull(),
@@ -1284,7 +1377,7 @@ export const staffNotifications = appSchema.table(
     readAt: timestamp("read_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("staff_notifications_user_idx").on(table.userId, table.createdAt)],
+  (table) => [index("staff_notifications_org_user_created_idx").on(table.organizationId, table.userId, table.createdAt.desc())],
 );
 
 export const projectMilestones = appSchema.table(
@@ -1301,7 +1394,10 @@ export const projectMilestones = appSchema.table(
     createdBy: uuid("created_by").notNull(),
     ...timestamps,
   },
-  (table) => [index("project_milestones_project_due_idx").on(table.projectId, table.dueOn)],
+  (table) => [
+    index("project_milestones_project_due_idx").on(table.projectId, table.dueOn),
+    index("project_milestones_org_open_due_idx").on(table.organizationId, table.dueOn).where(sql`${table.status} <> 'completed'`),
+  ],
 );
 
 export const paymentInstallments = appSchema.table(

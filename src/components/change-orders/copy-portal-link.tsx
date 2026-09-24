@@ -10,7 +10,7 @@ export function CopyPortalLink({ url }: { url: string }) {
   return (
     <Button
       type="button"
-      className="h-11"
+      className="h-8"
       onPress={async () => {
         try {
           await navigator.clipboard.writeText(url);

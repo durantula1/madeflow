@@ -1,10 +1,12 @@
 import { cn } from "@/lib/utils"
 
-function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
+// A block-level <span>, not a <div>: placeholders often sit inside <p> labels
+// (stat cards, detail headers), where a <div> is invalid HTML and breaks hydration.
+function Skeleton({ className, ...props }: React.ComponentProps<"span">) {
   return (
-    <div
+    <span
       data-slot="skeleton"
-      className={cn("animate-pulse rounded-md bg-muted", className)}
+      className={cn("skeleton block rounded-md bg-muted", className)}
       {...props}
     />
   )

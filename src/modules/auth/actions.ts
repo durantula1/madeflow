@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { getPublicEnvironment } from "@/lib/env/public";
+import { recordLegalConsent } from "@/modules/account/mutations";
 import { createClient } from "@/lib/supabase/server";
 
 export type AuthActionState = {
@@ -45,6 +46,9 @@ export async function signUpAction(
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message };
   }
+  if (formData.get("acceptLegal") !== "on") {
+    return { error: "Приеми Условията и Политиката за поверителност, за да продължиш." };
+  }
 
   const { NEXT_PUBLIC_APP_URL } = getPublicEnvironment();
   const supabase = await createClient();
@@ -62,6 +66,9 @@ export async function signUpAction(
   if (error) {
     return { error: "Регистрацията не беше завършена. Опитай отново." };
   }
+
+  // An already registered email comes back as a placeholder user without identities.
+  if (data.user?.identities?.length) await recordLegalConsent(data.user.id);
 
   if (data.session) redirect(safeNext);
 

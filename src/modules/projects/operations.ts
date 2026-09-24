@@ -27,7 +27,7 @@ async function currencyFor(organizationId: string, projectId: string) {
     .where(and(eq(changeOrders.organizationId, organizationId), eq(changeOrders.projectId, projectId), eq(changeOrders.documentKind, "offer")))
     .limit(1);
   if (!offer) throw new Error("Създай основна оферта преди платежния план.");
-  return offer.currency;
+  return "EUR";
 }
 
 function refresh(projectId: string) {
@@ -39,7 +39,7 @@ function refresh(projectId: string) {
 export async function addMilestoneAction(formData: FormData) {
   const context = await requireTenantContext();
   const projectId = projectIdFrom(formData);
-  await requireProjectCapability(context, projectId, "manage");
+  await requireProjectCapability(context, projectId, "milestone");
   const title = z.string().trim().min(2).max(180).parse(formData.get("title"));
   const dueOn = z.iso.date().parse(formData.get("dueOn"));
   const changeOrderId = formData.get("changeOrderId") ? uuid.parse(formData.get("changeOrderId")) : null;

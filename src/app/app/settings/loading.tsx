@@ -1,5 +1,5 @@
-import { WorkspacePageLoading } from "@/components/workspace/page-loading";
+import { SettingsPageSkeleton } from "./settings-skeleton";
 
 export default function SettingsLoading() {
-  return <WorkspacePageLoading page="settings" />;
+  return <SettingsPageSkeleton />;
 }

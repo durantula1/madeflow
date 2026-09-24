@@ -4,23 +4,21 @@ import { useActionState, useEffect, useMemo, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 
+import { StagedAttachments, useUploadStagedFiles } from "@/components/change-orders/staged-attachments";
 import { Stepper } from "@/components/change-orders/stepper";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  ProjectCombobox,
+  type ProjectOption,
+} from "@/components/workspace/project-combobox";
 import {
   createOfferAction,
   type QuickChangeState,
 } from "@/modules/change-orders/actions";
 
-type ProjectOption = { id: string; name: string };
 type Line = {
   key: string;
   description: string;
@@ -29,9 +27,10 @@ type Line = {
   unitPrice: string;
 };
 
-function blankLine(): Line {
+// The first row is rendered on the server too, so its key (used in input names) must be stable.
+function blankLine(key: string = crypto.randomUUID()): Line {
   return {
-    key: crypto.randomUUID(),
+    key,
     description: "",
     quantity: "1",
     unit: "бр.",
@@ -51,12 +50,10 @@ function formatMoney(value: number) {
 }
 
 export function OfferForm({
-  projects,
-  defaultProjectId,
+  defaultProject,
   defaultTaxRate,
 }: {
-  projects: ProjectOption[];
-  defaultProjectId?: string;
+  defaultProject?: ProjectOption | null;
   defaultTaxRate: string;
 }) {
   const [state, action, pending] = useActionState<QuickChangeState, FormData>(
@@ -64,16 +61,20 @@ export function OfferForm({
     {},
   );
   const [step, setStep] = useState<"edit" | "preview">("edit");
-  const [projectId, setProjectId] = useState(defaultProjectId ?? "");
+  const [project, setProject] = useState<ProjectOption | null>(
+    defaultProject ?? null,
+  );
+  const projectId = project?.id ?? "";
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [lines, setLines] = useState<Line[]>([blankLine()]);
+  const [lines, setLines] = useState<Line[]>(() => [blankLine("line-1")]);
   const [deadline, setDeadline] = useState("");
   const [localError, setLocalError] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const uploadProgress = useUploadStagedFiles(state.createdId, files, "offer-created");
 
   const taxRate = Number(defaultTaxRate);
-  const projectName =
-    projects.find((project) => project.id === projectId)?.name ?? "";
+  const projectName = project?.name ?? "";
 
   const priced = useMemo(
     () =>
@@ -153,27 +154,19 @@ export function OfferForm({
         <div className="space-y-4">
           <section className="rounded-2xl border bg-card p-4">
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block text-sm">
-                <span className="mb-1.5 block font-medium">Обект</span>
-                <Select
-                  selectedKey={projectId || null}
+              <div className="block text-sm">
+                <label htmlFor="projectId" className="mb-1.5 block font-medium">
+                  Обект
+                </label>
+                <ProjectCombobox
+                  id="projectId"
+                  defaultValue={project}
                   placeholder="Избери обект"
                   isRequired
-                  className="w-full"
-                  onSelectionChange={(key) => setProjectId(String(key ?? ""))}
-                >
-                  <SelectTrigger id="projectId" className="h-10">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projects.map((project) => (
-                      <SelectItem key={project.id} id={project.id}>
-                        {project.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
+                  inputClassName="h-10"
+                  onChange={setProject}
+                />
+              </div>
               <label className="block text-sm">
                 <span className="mb-1.5 block font-medium">Заглавие</span>
                 <Input
@@ -250,7 +243,7 @@ export function OfferForm({
                         <Trash2 className="size-4" />
                       </Button>
                     </div>
-                    <div className="mt-2 grid grid-cols-[6.5rem_4.5rem_minmax(8rem,1fr)] items-center gap-2 sm:contents">
+                    <div className="mt-2 grid grid-cols-[6.5rem_minmax(3.5rem,4.5rem)_minmax(0,1fr)] items-center gap-2 sm:contents">
                       <Stepper
                         name={`quantity-${line.key}`}
                         label={`Количество ${index + 1}`}
@@ -314,8 +307,10 @@ export function OfferForm({
           </section>
 
           <label className="block rounded-2xl border bg-card p-4 text-sm font-medium">Договорен краен срок
-            <Input type="date" required value={deadline} onChange={(event) => setDeadline(event.target.value)} className="mt-2 h-10" />
+            <div className="mt-2"><DatePicker aria-label="Договорен краен срок" required value={deadline} onChange={setDeadline} /></div>
           </label>
+
+          <StagedAttachments files={files} onChange={setFiles} />
         </div>
 
         <aside className="mt-4 rounded-2xl border bg-card p-4 lg:sticky lg:top-20 lg:mt-0">
@@ -350,6 +345,7 @@ export function OfferForm({
         <input type="hidden" name="taxRate" value={defaultTaxRate} />
         <input type="hidden" name="scheduleImpactType" value="none" />
         <input type="hidden" name="agreedDeadline" value={deadline} />
+        {files.length ? <input type="hidden" name="hasAttachments" value="1" /> : null}
         <section className="rounded-2xl border bg-card">
           <div className="border-b px-4 py-3 sm:px-6">
             <p className="text-xs font-medium text-primary">{projectName}</p>
@@ -392,6 +388,11 @@ export function OfferForm({
               </p>
             </div>
           </div>
+          {files.length ? (
+            <p className="border-t px-4 py-3 text-sm sm:px-6">
+              {files.length === 1 ? "1 файл ще бъде прикачен" : `${files.length} файла ще бъдат прикачени`} към черновата.
+            </p>
+          ) : null}
           <p className="border-t px-4 py-3 text-sm text-muted-foreground sm:px-6">
             Чернова. Клиентът още не я вижда, докато не я изпратиш.
           </p>
@@ -414,10 +415,10 @@ export function OfferForm({
           </Button>
           <Button
             type="submit"
-            isDisabled={pending}
+            isDisabled={pending || !!state.createdId}
             className="inline-flex h-11 flex-1 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50"
           >
-            {pending ? "Запазване…" : "Създай черновата"}
+            {uploadProgress ? `Качване на файлове ${uploadProgress.done + 1}/${uploadProgress.total}…` : pending || state.createdId ? "Запазване…" : "Създай черновата"}
           </Button>
         </div>
         </form>

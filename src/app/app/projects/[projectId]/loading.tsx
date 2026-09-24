@@ -1,5 +1,5 @@
-import { ProjectDetailLoading } from "@/components/workspace/page-loading";
+import { ProjectPageSkeleton } from "./project-skeleton";
 
 export default function ProjectLoading() {
-  return <ProjectDetailLoading />;
+  return <ProjectPageSkeleton />;
 }

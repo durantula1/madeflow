@@ -1,5 +1,12 @@
-import { WorkspacePageLoading } from "@/components/workspace/page-loading";
+import { FormSkeleton } from "@/components/workspace/page/form-skeleton";
+import { PageHeader } from "@/components/workspace/page/page-header";
+import { PageShell } from "@/components/workspace/page/page-shell";
 
 export default function NewOfferLoading() {
-  return <WorkspacePageLoading page="newOffer" />;
+  return (
+    <PageShell loading>
+      <PageHeader page="newOffer" back={{ label: "Назад" }} />
+      <FormSkeleton inputClassName="h-10" />
+    </PageShell>
+  );
 }

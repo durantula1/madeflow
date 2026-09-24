@@ -30,7 +30,7 @@ export async function createOrRotatePortalLinkAction(formData: FormData) {
       for (const grant of grants) await tx.update(portalSessions).set({ revokedAt: new Date() }).where(eq(portalSessions.portalGrantId, grant.id));
     }
     const generated = createStablePortalToken();
-    await tx.insert(portalGrants).values({ id: generated.id, projectId, projectContactId: contact.id, tokenHash: generated.tokenHash, tokenCiphertext: "derived-v1", scope: ["view", "decide"], expiresAt: null, createdBy: context.userId });
+    await tx.insert(portalGrants).values({ id: generated.id, projectId, projectContactId: contact.id, tokenHash: generated.tokenHash, tokenCiphertext: "derived-v1", scope: ["view"], expiresAt: null, createdBy: context.userId });
   });
   revalidatePath(`/app/projects/${projectId}`);
 }

@@ -5,6 +5,7 @@ import { and, asc, eq } from "drizzle-orm";
 
 import { getDatabase } from "@/db";
 import { organizationMembers, organizations } from "@/db/schema";
+import type { Permission } from "@/lib/authz/permissions";
 import { createClient } from "@/lib/supabase/server";
 
 export type TenantContext = {
@@ -13,6 +14,8 @@ export type TenantContext = {
   organizationName: string;
   organizationSlug: string;
   role: "owner" | "admin" | "member" | "field" | "office";
+  permissions: Permission[];
+  allProjects: boolean;
 };
 
 export class AuthenticationRequiredError extends Error {
@@ -40,6 +43,8 @@ export const getOptionalTenantContext = cache(
         organizationName: organizations.name,
         organizationSlug: organizations.slug,
         role: organizationMembers.role,
+        permissions: organizationMembers.permissions,
+        allProjects: organizationMembers.allProjects,
       })
       .from(organizationMembers)
       .innerJoin(
@@ -65,6 +70,8 @@ export const getOptionalTenantContext = cache(
       organizationName: membership.organizationName,
       organizationSlug: membership.organizationSlug,
       role: membership.role,
+      permissions: membership.permissions,
+      allProjects: membership.allProjects,
     };
   },
 );

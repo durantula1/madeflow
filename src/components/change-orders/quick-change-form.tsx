@@ -1,10 +1,13 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
+
+import { StagedAttachments, useUploadStagedFiles } from "@/components/change-orders/staged-attachments";
 import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -16,11 +19,15 @@ import {
 } from "@/components/ui/select";
 import { Stepper } from "@/components/change-orders/stepper";
 import {
+  ProjectCombobox,
+  type ProjectOption,
+} from "@/components/workspace/project-combobox";
+import {
   createChangeOrderAction,
   type QuickChangeState,
 } from "@/modules/change-orders/actions";
+import { getProjectOfferOptionsAction } from "@/modules/change-orders/offer-options-actions";
 
-type ProjectOption = { id: string; name: string };
 type OfferOption = {
   id: string;
   projectId: string;
@@ -34,25 +41,72 @@ const scheduleOptions = [
 ] as const;
 
 export function QuickChangeForm({
-  projects,
-  offers,
-  defaultProjectId,
+  defaultProject,
+  defaultOffers,
+  draftKey,
   defaultTaxRate,
 }: {
-  projects: ProjectOption[];
-  offers: OfferOption[];
-  defaultProjectId?: string;
+  defaultProject?: ProjectOption | null;
+  defaultOffers: OfferOption[];
+  /** Raw `?projectId=` from the URL; scopes the localStorage draft. */
+  draftKey?: string;
   defaultTaxRate: string;
 }) {
   const [state, action, pending] = useActionState<QuickChangeState, FormData>(
     createChangeOrderAction,
     {},
   );
-  const storageKey = `sitechange:draft:v2:${defaultProjectId ?? "new"}`;
-  const [projectId, setProjectId] = useState(defaultProjectId ?? "");
+  const [files, setFiles] = useState<File[]>([]);
+  const uploadProgress = useUploadStagedFiles(state.createdId, files, "change-created");
+  const storageKey = `sitechange:draft:v2:${draftKey ?? "new"}`;
+  const [project, setProject] = useState<ProjectOption | null>(
+    defaultProject ?? null,
+  );
+  const projectId = project?.id ?? "";
+  const defaultProjectId = defaultProject?.id;
+  // Remounts the uncontrolled project picker when a draft restores a different project.
+  const [pickerKey, setPickerKey] = useState(0);
+  const [offers, setOffers] = useState<OfferOption[]>(defaultOffers);
+  const [loadingOffers, setLoadingOffers] = useState(false);
+  const offersRequest = useRef(0);
   const [scheduleType, setScheduleType] = useState("none");
   const [showMore, setShowMore] = useState(false);
-  const visibleOffers = offers.filter((offer) => offer.projectId === projectId);
+  const visibleOffers = loadingOffers
+    ? []
+    : offers.filter((offer) => offer.projectId === projectId);
+
+  function loadProject(id: string, fromDraft = false) {
+    const current = ++offersRequest.current;
+    setLoadingOffers(true);
+    getProjectOfferOptionsAction(id)
+      .then((result) => {
+        if (current !== offersRequest.current) return;
+        if (fromDraft) {
+          // A restored project that is no longer visible is simply dropped.
+          if (!result) return;
+          setProject(result.project);
+          setPickerKey((key) => key + 1);
+        }
+        setOffers(result?.offers ?? []);
+      })
+      .catch(() => {
+        if (current === offersRequest.current) setOffers([]);
+      })
+      .finally(() => {
+        if (current === offersRequest.current) setLoadingOffers(false);
+      });
+  }
+
+  function selectProject(next: ProjectOption | null) {
+    setProject(next);
+    if (next) {
+      loadProject(next.id);
+    } else {
+      offersRequest.current++;
+      setOffers([]);
+      setLoadingOffers(false);
+    }
+  }
   useEffect(() => {
     if (state.error) toast.error(state.error);
   }, [state.error]);
@@ -68,6 +122,8 @@ export function QuickChangeForm({
       if (saved) {
         const values = JSON.parse(saved) as Record<string, string>;
         for (const [name, value] of Object.entries(values)) {
+          // The project is restored through state below so its name and offers load too.
+          if (name === "projectId") continue;
           const field = form.elements.namedItem(name);
           if (
             field instanceof HTMLInputElement ||
@@ -77,7 +133,9 @@ export function QuickChangeForm({
           }
         }
         window.requestAnimationFrame(() => {
-          if (values.projectId) setProjectId(values.projectId);
+          if (values.projectId && values.projectId !== defaultProjectId) {
+            loadProject(values.projectId, true);
+          }
           if (values.scheduleImpactType) setScheduleType(values.scheduleImpactType);
         });
       }
@@ -94,7 +152,7 @@ export function QuickChangeForm({
     };
     form.addEventListener("input", persist);
     return () => form.removeEventListener("input", persist);
-  }, [storageKey]);
+  }, [storageKey, defaultProjectId]);
 
   useEffect(() => {
     if (!persistReady.current) {
@@ -119,25 +177,16 @@ export function QuickChangeForm({
           <label htmlFor="projectId" className="mb-2 block text-sm font-medium">
             Обект
           </label>
-          <Select
+          <ProjectCombobox
+            key={pickerKey}
+            id="projectId"
             name="projectId"
-            selectedKey={projectId || null}
+            defaultValue={project}
             placeholder="Избери обект"
             isRequired
-            className="w-full"
-            onSelectionChange={(key) => setProjectId(String(key ?? ""))}
-          >
-            <SelectTrigger id="projectId" className="h-12 text-base">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {projects.map((project) => (
-                <SelectItem key={project.id} id={project.id}>
-                  {project.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            inputClassName="h-12 text-base"
+            onChange={selectProject}
+          />
         </div>
         <div>
           <label
@@ -146,11 +195,15 @@ export function QuickChangeForm({
           >
             Одобрена оферта
           </label>
-            <Select
-              key={projectId}
-              name="baselineOfferId"
+          <Select
+            key={projectId}
+            name="baselineOfferId"
             placeholder={
-              projectId ? "Избери оферта" : "Първо избери обект"
+              !projectId
+                ? "Първо избери обект"
+                : loadingOffers
+                  ? "Зареждане…"
+                  : "Избери оферта"
             }
             isRequired
             isDisabled={!visibleOffers.length}
@@ -168,7 +221,7 @@ export function QuickChangeForm({
               ))}
             </SelectContent>
           </Select>
-          {projectId && !visibleOffers.length ? (
+          {projectId && !loadingOffers && !visibleOffers.length ? (
             <p className="mt-2 text-sm text-muted-foreground">
               Няма одобрена оферта за този обект.
             </p>
@@ -253,7 +306,7 @@ export function QuickChangeForm({
         </div>
         {scheduleType === "days" && (
           <div className="mt-3 grid max-w-sm gap-2">
-            <label className="text-sm font-medium">Договорен нов краен срок<Input type="date" name="agreedDeadline" required className="mt-1 h-10" /></label>
+            <label className="text-sm font-medium">Договорен нов краен срок<div className="mt-1"><DatePicker name="agreedDeadline" required aria-label="Договорен нов краен срок" /></div></label>
           </div>
         )}
       </fieldset>
@@ -290,6 +343,8 @@ export function QuickChangeForm({
         </section>
       )}
       <input type="hidden" name="taxRate" value={defaultTaxRate} />
+      <StagedAttachments files={files} onChange={setFiles} />
+      {files.length ? <input type="hidden" name="hasAttachments" value="1" /> : null}
 
       {state.error && (
         <p
@@ -303,9 +358,9 @@ export function QuickChangeForm({
         <Button
           type="submit"
           className="h-12 w-full text-base"
-          isDisabled={pending || !visibleOffers.length}
+          isDisabled={pending || !!state.createdId || !visibleOffers.length}
         >
-          {pending ? "Запазване…" : "Запази промяната"}
+          {uploadProgress ? `Качване на файлове ${uploadProgress.done + 1}/${uploadProgress.total}…` : pending || state.createdId ? "Запазване…" : "Запази промяната"}
         </Button>
       </div>
     </form>

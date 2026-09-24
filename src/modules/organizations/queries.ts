@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, or } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDatabase } from "@/db";
-import { organizationMembers, organizations, profiles, specificationTemplates } from "@/db/schema";
-export async function getOrganizationSettings(organizationId:string){const db=getDatabase();const[[organization],members,templates]=await Promise.all([db.select().from(organizations).where(eq(organizations.id,organizationId)).limit(1),db.select({userId:organizationMembers.userId,role:organizationMembers.role,status:organizationMembers.status,displayName:profiles.displayName}).from(organizationMembers).leftJoin(profiles,eq(profiles.id,organizationMembers.userId)).where(eq(organizationMembers.organizationId,organizationId)).orderBy(asc(organizationMembers.createdAt)),db.select({id:specificationTemplates.id,name:specificationTemplates.nameBg,scope:specificationTemplates.scope,version:specificationTemplates.version,active:specificationTemplates.active}).from(specificationTemplates).where(and(eq(specificationTemplates.active,true),or(eq(specificationTemplates.scope,"platform"),eq(specificationTemplates.organizationId,organizationId))))]);return{organization:organization??null,members,templates};}
+import { organizations } from "@/db/schema";
+export async function getOrganizationSettings(organizationId:string){const[organization]=await getDatabase().select({name:organizations.name}).from(organizations).where(eq(organizations.id,organizationId)).limit(1);return organization??null;}

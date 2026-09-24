@@ -4,13 +4,18 @@ import { and, eq } from "drizzle-orm";
 
 import { getDatabase } from "@/db";
 import { organizationMembers, projectMembers, projects } from "@/db/schema";
+import { can, type Permission } from "@/lib/authz/permissions";
 import type { TenantContext } from "@/lib/authz/tenant-context";
 
-export type ProjectCapability = "view" | "draft" | "send" | "milestone" | "payment" | "manage";
+export type ProjectCapability = "view" | "draft" | "offer" | "send" | "milestone" | "payment" | "manage";
 
 export async function getCurrentMember(context: TenantContext) {
   const [member] = await getDatabase()
-    .select({ role: organizationMembers.role, canRecordPayments: organizationMembers.canRecordPayments })
+    .select({
+      role: organizationMembers.role,
+      permissions: organizationMembers.permissions,
+      allProjects: organizationMembers.allProjects,
+    })
     .from(organizationMembers)
     .where(and(
       eq(organizationMembers.organizationId, context.organizationId),
@@ -28,6 +33,21 @@ export async function requireOwner(context: TenantContext) {
   return member;
 }
 
+export async function requirePermission(context: TenantContext, permission: Permission) {
+  const member = await getCurrentMember(context);
+  if (!can(member, permission)) throw new Error("Нямаш право за това действие.");
+  return member;
+}
+
+const capabilityPermissions: Record<Exclude<ProjectCapability, "view">, Permission[]> = {
+  draft: ["changes.draft"],
+  offer: ["offers.edit"],
+  send: ["documents.send"],
+  manage: ["documents.send"],
+  milestone: ["milestones.manage"],
+  payment: ["payments.record"],
+};
+
 export async function requireProjectCapability(
   context: TenantContext,
   projectId: string,
@@ -42,19 +62,20 @@ export async function requireProjectCapability(
   if (!project) throw new Error("Обектът не е намерен.");
   if (member.role === "owner") return member;
 
-  const [assignment] = await getDatabase()
-    .select({ permission: projectMembers.permission })
-    .from(projectMembers)
-    .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, context.userId)))
-    .limit(1);
-  if (!assignment) throw new Error("Нямаш достъп до този обект.");
-  if (capability === "view") return member;
-  if (capability === "payment") {
-    if (member.canRecordPayments) return member;
-    throw new Error("Нямаш право да записваш плащания.");
+  if (!member.allProjects) {
+    const [assignment] = await getDatabase()
+      .select({ projectId: projectMembers.projectId })
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, context.userId)))
+      .limit(1);
+    if (!assignment) throw new Error("Нямаш достъп до този обект.");
   }
-  if (capability === "milestone") return member;
-  if (capability === "draft" && ["draft", "send", "manage"].includes(assignment.permission)) return member;
-  if (member.role === "office" && ["send", "manage"].includes(assignment.permission) && (capability === "send" || capability === "manage")) return member;
+  if (capability === "view") return member;
+  if (capabilityPermissions[capability].some((permission) => member.permissions.includes(permission))) return member;
+  if (capability === "payment") throw new Error("Нямаш право да записваш плащания.");
   throw new Error("Нямаш право за това действие.");
+}
+
+export function seesAllProjects(context: Pick<TenantContext, "role" | "allProjects">) {
+  return context.role === "owner" || context.allProjects;
 }

@@ -1,5 +1,5 @@
-import { WorkspacePageLoading } from "@/components/workspace/page-loading";
+import { TeamPageSkeleton } from "./team-sections";
 
 export default function TeamLoading() {
-  return <WorkspacePageLoading page="team" />;
+  return <TeamPageSkeleton />;
 }

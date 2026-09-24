@@ -1,24 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, Euro, Menu, Settings, Users } from "lucide-react";
+import { Euro, LayoutDashboard, Menu, Users } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
-export function MobileMoreMenu({ role }: { role: string }) {
+export function MobileMoreMenu({ owner, finance }: { owner: boolean; finance: boolean }) {
   const [open, setOpen] = useState(false);
   const items = [
-    { href: "/app/notifications", label: "Известия", icon: Bell },
-    ...(role === "owner" ? [{ href: "/app/team", label: "Екип", icon: Users }] : []),
-    ...(role !== "field" ? [{ href: "/app/finance", label: "Плащания", icon: Euro }] : []),
-    ...(role === "owner" ? [{ href: "/app/settings", label: "Настройки", icon: Settings }] : []),
+    { href: "/app", label: "Работен преглед", icon: LayoutDashboard },
+    ...(owner ? [{ href: "/app/team", label: "Екип", icon: Users }] : []),
+    ...(finance ? [{ href: "/app/finance", label: "Плащания", icon: Euro }] : []),
   ];
   return <SheetTrigger isOpen={open} onOpenChange={setOpen}>
-    <Button type="button" variant="ghost" className="mx-auto flex h-14 flex-col gap-0.5 px-2 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"><Menu className="size-5" /><span className="text-[10px]">Още</span></Button>
+    <Button type="button" variant="ghost" className="mx-auto flex h-14 w-full max-w-20 flex-col gap-0.5 rounded-xl px-1 text-sidebar-foreground/65 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"><Menu className="size-5" /><span className="text-[10px]">Още</span></Button>
     <SheetContent side="bottom" className="max-h-[80dvh] overflow-y-auto rounded-t-2xl">
-      <SheetHeader><SheetTitle>Още</SheetTitle><SheetDescription>Бърз достъп до екип, плащания и настройки.</SheetDescription></SheetHeader>
+      <SheetHeader><SheetTitle>Още</SheetTitle><SheetDescription>Бърз достъп до преглед, екип и плащания.</SheetDescription></SheetHeader>
       <div className="grid gap-1 p-4 pt-0">{items.map((item) => <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className="flex min-h-12 items-center gap-3 rounded-lg px-3 text-sm font-medium hover:bg-muted"><item.icon className="size-5 text-primary" />{item.label}</Link>)}</div>
     </SheetContent>
   </SheetTrigger>;

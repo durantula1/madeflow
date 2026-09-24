@@ -6,6 +6,7 @@ const serverEnvironmentSchema = z.object({
   DATABASE_URL: z.string().min(1),
   DATABASE_MIGRATION_URL: z.string().min(1).optional(),
   SUPABASE_SECRET_KEY: z.string().min(1).optional(),
+  CRON_SECRET: z.string().min(16).optional(),
   RESEND_API_KEY: z.string().min(1).optional(),
   EMAIL_FROM: z.string().min(1).default("MadeFlow <notifications@example.com>"),
 });
@@ -19,6 +20,7 @@ export function getServerEnvironment(): ServerEnvironment {
     DATABASE_URL: process.env.DATABASE_URL,
     DATABASE_MIGRATION_URL: process.env.DATABASE_MIGRATION_URL,
     SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY,
+    CRON_SECRET: process.env.CRON_SECRET,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     EMAIL_FROM: process.env.EMAIL_FROM,
   });

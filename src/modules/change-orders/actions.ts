@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { getDatabase } from "@/db";
 import {
+  changeAttachments,
   changeOrderLineItems,
   changeOrderRevisions,
   changeOrders,
@@ -21,9 +22,12 @@ import { requireTenantContext } from "@/lib/authz/tenant-context";
 import { requireProjectCapability } from "@/lib/authz/project-access";
 import { hashCanonicalJson } from "@/lib/crypto/canonical-json";
 import { createStablePortalToken } from "@/lib/crypto/portal-token";
+import { escapeHtml, sendEmail } from "@/lib/email/send";
+import { getActivePortalLink } from "@/modules/change-portal/links";
 import { getProjectState } from "@/modules/projects/state";
 
-export type QuickChangeState = { error?: string };
+/** `createdId` comes back instead of a redirect when the form still has files to upload. */
+export type QuickChangeState = { error?: string; createdId?: string };
 
 const quickChangeSchema = z.object({
   projectId: z.uuid(),
@@ -219,9 +223,9 @@ export async function createChangeOrderAction(
 
   revalidatePath("/app");
   revalidatePath("/app/offers");
-  revalidatePath("/app/changes");
   revalidatePath(`/app/projects/${data.projectId}`);
-  redirect(`/app/changes/${changeOrderId}?notice=change-created`);
+  if (formData.get("hasAttachments") === "1") return { createdId: changeOrderId };
+  redirect(`/app/offers/${changeOrderId}?notice=change-created`);
 }
 
 export async function createOfferAction(
@@ -233,7 +237,7 @@ export async function createOfferAction(
 
   const context = await requireTenantContext();
   const data = parsed.data;
-  await requireProjectCapability(context, data.projectId, "send");
+  await requireProjectCapability(context, data.projectId, "offer");
   const database = getDatabase();
   const project = await database
     .select({ id: projects.id })
@@ -353,7 +357,8 @@ export async function createOfferAction(
   revalidatePath("/app");
   revalidatePath("/app/offers");
   revalidatePath(`/app/projects/${data.projectId}`);
-  redirect(`/app/changes/${offerId}?notice=offer-created`);
+  if (formData.get("hasAttachments") === "1") return { createdId: offerId };
+  redirect(`/app/offers/${offerId}?notice=offer-created`);
 }
 
 const revisionSchema = z.object({
@@ -384,8 +389,8 @@ export async function createDocumentRevisionAction(_state: QuickChangeState, for
   const [document] = await db.select({ projectId: changeOrders.projectId, documentKind: changeOrders.documentKind })
     .from(changeOrders).where(and(eq(changeOrders.id, data.changeOrderId), eq(changeOrders.organizationId, context.organizationId))).limit(1);
   if (!document) return { error: "Документът не е намерен." };
-  const member = await requireProjectCapability(context, document.projectId, "draft");
-  if (document.documentKind === "offer" && member.role === "field") return { error: "Теренната роля не редактира оферти." };
+  try { await requireProjectCapability(context, document.projectId, document.documentKind === "offer" ? "offer" : "draft"); }
+  catch (error) { return { error: error instanceof Error ? error.message : "Нямаш право за това действие." }; }
   if (document.documentKind === "offer" && (!data.agreedDeadline || !data.lines.length)) return { error: "Офертата изисква краен срок и поне един ред." };
   if (document.documentKind === "change" && data.scheduleImpactType === "days" && !data.agreedDeadline) return { error: "Посочи нов краен срок." };
   let scheduleDays: number | null = null;
@@ -417,11 +422,20 @@ export async function createDocumentRevisionAction(_state: QuickChangeState, for
     }).returning({ id: changeOrderRevisions.id });
     if (!revision) throw new Error("Версията не беше създадена.");
     if (document.documentKind === "offer") await tx.insert(changeOrderLineItems).values(priced.map((line, index) => ({ revisionId: revision.id, position: index + 1, description: line.description, quantity: line.quantity.toFixed(3), unit: line.unit || null, unitPrice: line.unitPrice.toFixed(2), lineTotal: line.lineTotal.toFixed(2) })));
+    // The new version starts with the files of the previous one; the stored objects are shared.
+    const carried = await tx.select().from(changeAttachments).where(eq(changeAttachments.revisionId, current.id));
+    if (carried.length) {
+      await tx.insert(changeAttachments).values(carried.map((attachment) => ({
+        organizationId: attachment.organizationId, projectId: attachment.projectId, changeOrderId: attachment.changeOrderId, revisionId: revision.id,
+        storagePath: attachment.storagePath, originalName: attachment.originalName, kind: attachment.kind, mimeType: attachment.mimeType,
+        byteSize: attachment.byteSize, sha256: attachment.sha256, visibility: attachment.visibility, createdBy: attachment.createdBy,
+      })));
+    }
     await tx.update(changeOrders).set({ currentRevisionId: revision.id, lifecycleStatus: "draft", updatedAt: new Date() }).where(eq(changeOrders.id, data.changeOrderId));
     await tx.insert(timelineEvents).values({ organizationId: context.organizationId, projectId: document.projectId, changeOrderId: data.changeOrderId, revisionId: revision.id, actorType: "staff", actorId: context.userId, eventType: "revision_created", visibility: "internal", metadata: { revisionNumber: current.revisionNumber + 1 } });
   });
-  revalidatePath(`/app/changes/${data.changeOrderId}`);
-  redirect(`/app/changes/${data.changeOrderId}?notice=revision-saved`);
+  revalidatePath(`/app/offers/${data.changeOrderId}`);
+  redirect(`/app/offers/${data.changeOrderId}?notice=revision-saved`);
 }
 
 const sendSchema = z.object({ changeOrderId: z.uuid() });
@@ -434,7 +448,7 @@ export async function sendChangeOrderAction(formData: FormData) {
     .from(changeOrders).where(and(eq(changeOrders.id, changeOrderId), eq(changeOrders.organizationId, context.organizationId))).limit(1);
   if (!target) throw new Error("Документът не е намерен.");
   await requireProjectCapability(context, target.projectId, "send");
-  const { projectId } = await database.transaction(
+  const { projectId, ...sent } = await database.transaction(
     async (transaction) => {
       const [change] = await transaction
         .select({
@@ -468,7 +482,7 @@ export async function sendChangeOrderAction(formData: FormData) {
       }
 
       const [contact] = await transaction
-        .select({ id: projectContacts.id })
+        .select({ id: projectContacts.id, name: projectContacts.name, email: projectContacts.email })
         .from(projectContacts)
         .where(
           and(
@@ -493,6 +507,12 @@ export async function sendChangeOrderAction(formData: FormData) {
         .from(changeOrderLineItems)
         .where(eq(changeOrderLineItems.revisionId, revision.id))
         .orderBy(changeOrderLineItems.position);
+      // The fingerprint also proves which files the client saw with this version.
+      const attachments = await transaction
+        .select({ name: changeAttachments.originalName, mimeType: changeAttachments.mimeType, sha256: changeAttachments.sha256 })
+        .from(changeAttachments)
+        .where(eq(changeAttachments.revisionId, revision.id))
+        .orderBy(changeAttachments.id);
       const contentHash = hashCanonicalJson({
         changeOrderId: change.id,
         revisionNumber: revision.revisionNumber,
@@ -511,6 +531,7 @@ export async function sendChangeOrderAction(formData: FormData) {
         agreedDeadline: revision.agreedDeadline,
         clientNote: revision.clientNote,
         lineItems,
+        ...(attachments.length ? { attachments } : {}),
       });
       const now = new Date();
       if (revision.status === "draft") {
@@ -556,15 +577,29 @@ export async function sendChangeOrderAction(formData: FormData) {
         projectId: change.projectId,
         tokenHash: generated.tokenHash,
         tokenCiphertext: "derived-v1",
-        scope: ["view", "decide"],
+        scope: ["view"],
         expiresAt: null,
         createdBy: context.userId,
       });
-      return { projectId: change.projectId };
+      return { projectId: change.projectId, contact, documentKind: change.documentKind, title: revision.title, revisionNumber: revision.revisionNumber };
     },
   );
 
-  revalidatePath(`/app/changes/${changeOrderId}`);
+  await emailPortalLink({ organizationName: context.organizationName, projectId, ...sent }).catch((cause) => console.error("[portal-link-email]", cause));
+  revalidatePath(`/app/offers/${changeOrderId}`);
   revalidatePath(`/app/projects/${projectId}`);
-  redirect(`/app/changes/${changeOrderId}`);
+  redirect(`/app/offers/${changeOrderId}`);
+}
+
+async function emailPortalLink(input: { organizationName: string; projectId: string; contact: { id: string; name: string; email: string | null }; documentKind: "offer" | "change"; title: string; revisionNumber: number }) {
+  if (!input.contact.email) return;
+  const url = await getActivePortalLink(input.projectId, input.contact.id);
+  if (!url) return;
+  const kind = input.documentKind === "offer" ? "оферта" : "промяна";
+  await sendEmail({
+    to: input.contact.email,
+    subject: `${input.organizationName} ти изпрати ${kind}: ${input.title}`,
+    text: `Здравей, ${input.contact.name}!\n\n${input.organizationName} ти изпрати ${kind} „${input.title}“ (версия ${input.revisionNumber}).\n\nПрегледай я тук: ${url}\n\nРешението се потвърждава с еднократен код, който получаваш само ти на този имейл.`,
+    html: `<p>Здравей, ${escapeHtml(input.contact.name)}!</p><p>${escapeHtml(input.organizationName)} ти изпрати ${kind} „${escapeHtml(input.title)}“ (версия ${input.revisionNumber}).</p><p><a href="${url}" style="display:inline-block;padding:12px 20px;border-radius:10px;background:#18181b;color:#fff;text-decoration:none;font-weight:600">Прегледай документа</a></p><p style="color:#71717a">Решението се потвърждава с еднократен код, който получаваш само ти на този имейл. Не препращай този линк.</p>`,
+  });
 }

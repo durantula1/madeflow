@@ -1,18 +1,36 @@
 import "server-only";
-import { and, count, eq, gte, isNull, sql } from "drizzle-orm";
-import { getDatabase } from "@/db";
-import { customers, orders, serviceRequests } from "@/db/schema";
 
-export async function getDashboardSummary(organizationId: string) {
-  const database = getDatabase();
-  const monthStart = new Date();
-  monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
-  const [[allOrders], [awaiting], [activeCustomers], [openService], [monthValue]] = await Promise.all([
-    database.select({ value: count() }).from(orders).where(and(eq(orders.organizationId, organizationId), isNull(orders.archivedAt))),
-    database.select({ value: count() }).from(orders).where(and(eq(orders.organizationId, organizationId), eq(orders.stage, "awaiting_approval"))),
-    database.select({ value: count() }).from(customers).where(and(eq(customers.organizationId, organizationId), isNull(customers.archivedAt))),
-    database.select({ value: count() }).from(serviceRequests).where(and(eq(serviceRequests.organizationId, organizationId), sql`${serviceRequests.status} in ('open', 'in_progress')`)),
-    database.select({ value: sql<bigint>`coalesce(sum(${orders.currentTotalMinor}), 0)` }).from(orders).where(and(eq(orders.organizationId, organizationId), gte(orders.updatedAt, monthStart))),
-  ]);
-  return { orders: allOrders?.value ?? 0, awaiting: awaiting?.value ?? 0, customers: activeCustomers?.value ?? 0, openService: openService?.value ?? 0, monthValueMinor: monthValue?.value ?? 0n };
+import { and, eq, exists, inArray, isNull, lt, ne, sql } from "drizzle-orm";
+
+import { getDatabase } from "@/db";
+import { changeOrderRevisions, changeOrders, organizations, projectMembers, projectMilestones, projects } from "@/db/schema";
+import { seesAllProjects } from "@/lib/authz/project-access";
+import type { TenantContext } from "@/lib/authz/tenant-context";
+import { sofiaToday } from "@/modules/finance/queries";
+
+/** Dashboard counters in one round trip (scalar subqueries), same visibility rules as the project and document lists. */
+export async function getDashboardStats(context: TenantContext) {
+  const db = getDatabase();
+  const all = seesAllProjects(context);
+  const member = (projectId: typeof projects.id | typeof changeOrders.projectId) => all ? undefined : exists(db.select({ id: projectMembers.projectId }).from(projectMembers).where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, context.userId))));
+  const activeProjects = db.select({ total: sql`count(*)::int` }).from(projects)
+    .where(and(eq(projects.organizationId, context.organizationId), isNull(projects.archivedAt), eq(projects.status, "active"), member(projects.id)));
+  const documents = (statuses: ("sent" | "viewed" | "changes_requested")[]) => db.select({ total: sql`count(*)::int` }).from(changeOrders)
+    .innerJoin(changeOrderRevisions, eq(changeOrderRevisions.id, changeOrders.currentRevisionId))
+    .where(and(eq(changeOrders.organizationId, context.organizationId), isNull(changeOrders.archivedAt), inArray(changeOrderRevisions.status, statuses), member(changeOrders.projectId)));
+  const overdueMilestones = db.select({ total: sql`count(*)::int` }).from(projectMilestones)
+    .innerJoin(projects, eq(projects.id, projectMilestones.projectId))
+    .where(and(eq(projectMilestones.organizationId, context.organizationId), ne(projectMilestones.status, "completed"), lt(projectMilestones.dueOn, sofiaToday()), eq(projects.organizationId, context.organizationId), isNull(projects.archivedAt), member(projects.id)));
+  const [row] = await db.select({
+    activeProjects: sql<number>`(${activeProjects})`,
+    awaitingDecision: sql<number>`(${documents(["sent", "viewed"])})`,
+    overdueMilestones: sql<number>`(${overdueMilestones})`,
+    changesRequested: sql<number>`(${documents(["changes_requested"])})`,
+  }).from(organizations).where(eq(organizations.id, context.organizationId));
+  return {
+    activeProjects: Number(row?.activeProjects ?? 0),
+    awaitingDecision: Number(row?.awaitingDecision ?? 0),
+    overdueMilestones: Number(row?.overdueMilestones ?? 0),
+    changesRequested: Number(row?.changesRequested ?? 0),
+  };
 }

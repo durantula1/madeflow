@@ -9,19 +9,34 @@ export function NavLink({
   href,
   label,
   icon,
-  activeHref,
+  variant = "sidebar",
 }: {
   href: string;
   label: string;
   icon: ReactNode;
-  activeHref?: string;
+  variant?: "sidebar" | "tab";
 }) {
   const pathname = usePathname();
-  const active = activeHref
-    ? href === activeHref
-    : href === "/app"
-      ? pathname === href
-      : pathname.startsWith(href);
+  const active = href === "/app" ? pathname === href : pathname.startsWith(href);
+  if (variant === "tab") {
+    return (
+      <Link
+        href={href}
+        prefetch={true}
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "relative mx-auto flex h-14 w-full max-w-20 flex-col items-center justify-center gap-0.5 rounded-xl px-1 transition",
+          active
+            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+            : "text-sidebar-foreground/65 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+        )}
+      >
+        {icon}
+        <span className="max-w-full truncate text-[10px] font-medium">{label}</span>
+        <NavPending />
+      </Link>
+    );
+  }
   return (
     <Link
       href={href}

@@ -1,0 +1,208 @@
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
+import { Plus } from "lucide-react";
+import { AttachmentsPanel } from "@/components/change-orders/attachments-panel";
+import { CopyPortalLink } from "@/components/change-orders/copy-portal-link";
+import { RevisionForm } from "@/components/change-orders/revision-form";
+import { DocumentStatusBadge } from "@/components/change-orders/document-status-badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DataTable } from "@/components/workspace/data-table";
+import { DetailHeader } from "@/components/workspace/detail-header";
+import { PageShell } from "@/components/workspace/page/page-shell";
+import { StatCard } from "@/components/workspace/stat-card";
+import { ActionForm, ActionSubmit } from "@/components/workspace/action-form";
+import { ListPagination } from "@/components/workspace/list-filters";
+import { requireTenantContext } from "@/lib/authz/tenant-context";
+import { can } from "@/lib/authz/permissions";
+import { getCurrentMember, requireProjectCapability } from "@/lib/authz/project-access";
+import { sendChangeOrderAction } from "@/modules/change-orders/actions";
+import { listRevisionAttachments } from "@/modules/change-orders/attachment-data";
+import { documentCode, scheduleLabel } from "@/modules/change-orders/labels";
+import { lastPage, pageHref, pageOffset, parsePage } from "@/lib/pagination";
+import { countChangeOrders, getChangeOrder, listChangeOrders } from "@/modules/change-orders/queries";
+import { getActivePortalLink } from "@/modules/change-portal/links";
+import { maskEmail } from "@/lib/email/send";
+import { changesCardTitle, documentStatsClassName, documentTabLabels } from "./document-skeleton";
+
+const eventLabels: Record<string, string> = {
+  change_created: "Създадена чернова",
+  offer_created: "Създадена чернова",
+  revision_sent: "Изпратена към клиента",
+  decision_approved: "Одобрена от клиента",
+  decision_declined: "Отказана от клиента",
+  changes_requested: "Клиентът поиска промяна",
+  decision_changes_requested: "Клиентът поиска промяна",
+  decision_disputed: "Клиентът оспори решението",
+  portal_staff_session_blocked: "Блокиран опит за решение от служебен профил",
+  attachment_added: "Прикачен файл",
+  attachment_removed: "Премахнат файл",
+};
+
+const CHANGES_PAGE_SIZE = 10;
+
+const formatDate = (value: Date) => new Intl.DateTimeFormat("bg-BG", { dateStyle: "medium", timeStyle: "short" }).format(value);
+
+export default async function ChangeOrderPage({ params, searchParams }: PageProps<"/app/offers/[changeOrderId]">) {
+  const [{ changeOrderId }, query, context] = await Promise.all([params, searchParams, requireTenantContext()]);
+  const eventsBefore = typeof query.eventsBefore === "string" && /^[1-9]\d{0,14}$/.test(query.eventsBefore) ? Number(query.eventsBefore) : undefined;
+  const change = await getChangeOrder(context.organizationId, changeOrderId, { eventsBefore });
+  if (!change) notFound();
+  await requireProjectCapability(context, change.projectId, "view");
+  const isOffer = change.documentKind === "offer";
+  const changesPage = parsePage(query.changesPage);
+  const path = `/app/offers/${change.id}`;
+  const [member, portalUrl, offerChanges, offerChangesTotal, attachments] = await Promise.all([
+    getCurrentMember(context),
+    change.contactId ? getActivePortalLink(change.projectId, change.contactId) : Promise.resolve(null),
+    isOffer ? listChangeOrders({ context, baselineOfferId: change.id, documentKind: "change", limit: CHANGES_PAGE_SIZE, offset: pageOffset(changesPage, CHANGES_PAGE_SIZE) }) : Promise.resolve([]),
+    isOffer ? countChangeOrders({ context, baselineOfferId: change.id, documentKind: "change" }) : Promise.resolve(0),
+    listRevisionAttachments(change.revisionId),
+  ]);
+  if (isOffer && !offerChanges.length && changesPage > lastPage(offerChangesTotal, CHANGES_PAGE_SIZE)) redirect(pageHref(path, {}, "changesPage", lastPage(offerChangesTotal, CHANGES_PAGE_SIZE)));
+  if (!can(member, "drafts.view_all") && !change.frozenAt && change.revisionCreatedBy !== context.userId) notFound();
+  const canEdit = ["draft", "changes_requested", "declined"].includes(change.revisionStatus) && can(member, change.documentKind === "offer" ? "offers.edit" : "changes.draft");
+  const kindLabel = change.documentKind === "offer" ? "Оферта" : "Промяна";
+  const disputed = change.disputeEvent;
+  const changesPageParam = changesPage > 1 ? String(changesPage) : undefined;
+  const olderEventsHref = change.hasOlderEvents && change.events.length ? pageHref(path, { changesPage: changesPageParam, eventsBefore: String(change.events[change.events.length - 1].id) }, "changesPage", changesPage) : null;
+  const latestEventsHref = eventsBefore !== undefined ? pageHref(path, {}, "changesPage", changesPage) : null;
+
+  return (
+    <PageShell>
+      <DetailHeader
+        backHref={isOffer ? "/app/offers" : change.baselineOffer ? `/app/offers/${change.baselineOffer.id}` : `/app/projects/${change.projectId}`}
+        backLabel={isOffer ? "Оферти" : change.baselineOffer ? `${documentCode("offer", change.baselineOffer.sequenceNumber)} · ${change.baselineOffer.title}` : change.projectName}
+        title={change.title}
+        status={<DocumentStatusBadge status={change.revisionStatus} />}
+        metadata={
+          <>
+            <span className="font-mono">{documentCode(change.documentKind, change.sequenceNumber)}</span>
+            <span aria-hidden="true">·</span>
+            <span>Версия {change.revisionNumber}</span>
+            <span aria-hidden="true">·</span>
+            <Link href={`/app/projects/${change.projectId}`} className="hover:text-foreground hover:underline">{change.projectName}</Link>
+            <span aria-hidden="true">·</span>
+            <span>{change.contactName}</span>
+            <span aria-hidden="true">·</span>
+            <span>{change.siteAddress}</span>
+          </>
+        }
+        action={
+          <div className="flex flex-wrap gap-2">
+            {change.revisionStatus === "draft" && can(member, "documents.send") ? (
+              <ActionForm action={sendChangeOrderAction} success="Документът е изпратен">
+                <input type="hidden" name="changeOrderId" value={change.id} />
+                <ActionSubmit>Замрази и изпрати</ActionSubmit>
+              </ActionForm>
+            ) : null}
+            {change.frozenAt ? <a href={`/api/changes/${change.id}/pdf`} className="inline-flex h-8 items-center rounded-lg border bg-card px-2.5 text-sm font-medium">Свали PDF</a> : null}
+            {portalUrl ? <CopyPortalLink url={portalUrl} /> : null}
+          </div>
+        }
+      />
+      {disputed ? (
+        <div role="alert" className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+          <p className="font-semibold">Клиентът оспори решението по тази версия</p>
+          <p className="mt-1">{typeof disputed.metadata.reason === "string" && disputed.metadata.reason ? disputed.metadata.reason : "Клиентът твърди, че не е взел това решение."} · {formatDate(disputed.createdAt)}</p>
+        </div>
+      ) : null}
+      {change.decision ? (
+        <Card>
+          <CardHeader><CardTitle>Доказателство за решението</CardTitle></CardHeader>
+          <CardContent className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+            <p><span className="text-muted-foreground">Име:</span> {change.decision.typedName}</p>
+            <p><span className="text-muted-foreground">Време:</span> {formatDate(change.decision.createdAt)}</p>
+            <p><span className="text-muted-foreground">Потвърдено с код до:</span> {change.decision.verifiedEmail ? maskEmail(change.decision.verifiedEmail) : "— (старо решение без код)"}</p>
+            <p><span className="text-muted-foreground">IP адрес:</span> {change.decision.ip ?? "—"}</p>
+            <p className="break-all sm:col-span-2"><span className="text-muted-foreground">Отпечатък на версията:</span> <span className="font-mono text-xs">{change.decision.revisionContentHash}</span></p>
+          </CardContent>
+        </Card>
+      ) : null}
+      <div className={documentStatsClassName}>
+        <StatCard size="lg" label="Обща цена с ДДС" value={`${Number(change.total).toFixed(2)} ${change.currency}`} />
+        <StatCard size="lg" label={`ДДС ${change.taxRate}%`} value={`${Number(change.taxAmount).toFixed(2)} ${change.currency}`} />
+        <StatCard size="sm" label={change.documentKind === "offer" ? "Срок" : "Отражение върху срока"} value={scheduleLabel(change.documentKind, change.scheduleImpactType, change.scheduleImpactDays, change.agreedDeadline)} />
+      </div>
+      {isOffer ? (
+        <Card>
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
+            <CardTitle>{changesCardTitle}</CardTitle>
+            {change.revisionStatus === "approved" && can(member, "changes.draft") ? (
+              <Link href={`/app/offers/changes/new?projectId=${change.projectId}`} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-2.5 text-sm font-medium text-primary-foreground"><Plus className="size-4" /> Нова промяна</Link>
+            ) : null}
+          </CardHeader>
+          <CardContent>
+            {offerChanges.length ? <DataTable
+              label={changesCardTitle}
+              columns={[{ id: "code", header: "Код" }, { id: "title", header: "Промяна", mobile: "primary" }, { id: "status", header: "Статус" }, { id: "total", header: "Сума", className: "text-right" }]}
+              rows={offerChanges.map((item) => ({
+                id: item.id,
+                href: `/app/offers/${item.id}`,
+                cells: [
+                  <span key="code" className="font-mono text-xs text-muted-foreground">{documentCode("change", item.sequenceNumber)}</span>,
+                  <div key="title"><p className="font-medium">{item.title}</p><p className="text-sm text-muted-foreground">версия {item.revisionNumber}</p></div>,
+                  <DocumentStatusBadge key="status" status={item.revisionStatus} />,
+                  <span key="total" className="font-semibold">{Number(item.total ?? 0).toFixed(2)} {item.currency}</span>,
+                ],
+              }))}
+              footer={<ListPagination path={path} params={{ eventsBefore: eventsBefore !== undefined ? String(eventsBefore) : undefined }} page={changesPage} total={offerChangesTotal} pageSize={CHANGES_PAGE_SIZE} pageParam="changesPage" />}
+            /> : <p className="py-6 text-center text-sm text-muted-foreground">{change.revisionStatus === "approved" ? "Още няма промени по тази оферта." : "Промяна се добавя след одобрение на офертата."}</p>}
+          </CardContent>
+        </Card>
+      ) : null}
+      <Tabs defaultSelectedKey={eventsBefore !== undefined ? "history" : "preview"}>
+        <TabsList>
+          <TabsTrigger id="preview">{documentTabLabels.preview}</TabsTrigger>
+          {canEdit ? <TabsTrigger id="edit">{documentTabLabels.edit}</TabsTrigger> : null}
+          <TabsTrigger id="history">{documentTabLabels.history}</TabsTrigger>
+        </TabsList>
+        <TabsContent id="preview" className="flex flex-col gap-5 pt-5">
+          <Card>
+            <CardHeader><CardTitle>{kindLabel}</CardTitle></CardHeader>
+            <CardContent className="flex flex-col gap-5">
+              <section>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{change.documentKind === "offer" ? "Какво включва" : "Какво се променя"}</p>
+                <p className="mt-2 text-base leading-7">{change.description}</p>
+              </section>
+              {change.reason ? <section><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Защо е необходимо</p><p className="mt-2">{change.reason}</p></section> : null}
+              {change.clientNote ? <p className="rounded-xl bg-muted p-4 text-sm">{change.clientNote}</p> : null}
+            </CardContent>
+          </Card>
+          {change.lineItems.length ? <DataTable
+            label="Редове"
+            columns={[{ id: "line", header: "Ред", mobile: "primary" }, { id: "qty", header: "К-во" }, { id: "unit", header: "Мярка" }, { id: "total", header: "Сума", className: "text-right" }]}
+            rows={change.lineItems.map((line) => ({
+              id: String(line.id),
+              cells: [line.description, Number(line.quantity), line.unit, Number(line.lineTotal).toFixed(2)],
+            }))}
+          /> : null}
+          <AttachmentsPanel
+            changeOrderId={change.id}
+            initial={attachments}
+            editable={canEdit && change.revisionStatus === "draft"}
+          />
+          {change.internalNote && can(member, "notes.view") ? <Card><CardHeader><CardTitle>Вътрешна бележка</CardTitle></CardHeader><CardContent className="text-muted-foreground">{change.internalNote}</CardContent></Card> : null}
+        </TabsContent>
+        {canEdit ? <TabsContent id="edit" className="pt-5"><RevisionForm initial={{ id: change.id, documentKind: change.documentKind, title: change.title, description: change.description, reason: change.reason, changeKind: change.changeKind, subtotal: change.subtotal, taxRate: change.taxRate, scheduleImpactType: change.scheduleImpactType, scheduleImpactDays: change.scheduleImpactDays, agreedDeadline: change.agreedDeadline, clientNote: change.clientNote, internalNote: change.internalNote, lineItems: change.lineItems }} /></TabsContent> : null}
+        <TabsContent id="history" className="flex flex-col gap-5 pt-5">
+          <Card>
+            <CardHeader><CardTitle>Версии</CardTitle></CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              {change.revisions.filter((revision) => revision.frozenAt).length ? change.revisions.filter((revision) => revision.frozenAt).map((revision) => <a key={revision.id} href={`/api/changes/${change.id}/pdf?revision=${revision.id}`} className="text-sm text-primary underline">Версия {revision.revisionNumber} · {revision.status} · PDF</a>) : <p className="text-sm text-muted-foreground">Още няма замразена версия.</p>}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Събития</CardTitle></CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              {latestEventsHref ? <Link href={latestEventsHref} className="text-sm font-medium text-primary underline">Към най-новите събития</Link> : null}
+              {!change.events.length ? <p className="text-sm text-muted-foreground">Няма събития.</p> : null}
+              {change.events.map((event) => <div key={event.id}><p className="text-sm font-medium">{eventLabels[event.eventType] ?? event.eventType}</p><p className="text-xs text-muted-foreground">{new Intl.DateTimeFormat("bg-BG", { dateStyle: "medium", timeStyle: "short" }).format(event.createdAt)}</p></div>)}
+              {olderEventsHref ? <Link href={olderEventsHref} className="text-sm font-medium text-primary underline">По-стари събития</Link> : null}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </PageShell>
+  );
+}

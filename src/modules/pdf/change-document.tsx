@@ -1,37 +1,154 @@
 import path from "node:path";
 
-import { Document, Font, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
+import { Document, Font, Image, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 
-Font.register({ family: "MadeFlowCyrillic", fonts: [
-  { src: path.join(process.cwd(), "node_modules/@fontsource/noto-sans/files/noto-sans-cyrillic-ext-400-normal.woff"), fontWeight: 400 },
-  { src: path.join(process.cwd(), "node_modules/@fontsource/noto-sans/files/noto-sans-cyrillic-ext-600-normal.woff"), fontWeight: 600 },
+// Full Noto Sans (Latin + Cyrillic + €). The @fontsource woff files are unicode-range subsets,
+// and react-pdf cannot merge subsets into one family, so every missing glyph rendered blank.
+const fontDirectory = path.join(process.cwd(), "src/modules/pdf/fonts");
+Font.register({ family: "NotoSans", fonts: [
+  { src: path.join(fontDirectory, "NotoSans-Regular.ttf"), fontWeight: 400 },
+  { src: path.join(fontDirectory, "NotoSans-SemiBold.ttf"), fontWeight: 600 },
 ] });
+// Words are wrapped as a whole; the default hyphenation splits Bulgarian words at random places.
+Font.registerHyphenationCallback((word) => [word]);
+
+const ink = "#1c2420";
+const muted = "#66706b";
+const rule = "#dfe3df";
 
 const styles = StyleSheet.create({
-  page: { fontFamily: "MadeFlowCyrillic", padding: 36, color: "#252820", fontSize: 10 },
-  header: { backgroundColor: "#222920", padding: 20, borderRadius: 8, color: "#fff" },
-  brand: { color: "#9dd3a8", fontSize: 9, marginBottom: 10 },
-  title: { fontSize: 20, fontWeight: 600 },
-  meta: { fontSize: 8, color: "#ddd", marginTop: 8 },
-  section: { marginTop: 18, borderBottom: "1 solid #ddd", paddingBottom: 12 },
-  heading: { fontSize: 12, fontWeight: 600, marginBottom: 7 },
-  row: { display: "flex", flexDirection: "row", justifyContent: "space-between", gap: 12, paddingVertical: 5 },
-  total: { marginTop: 12, padding: 12, backgroundColor: "#eff3ed", borderRadius: 6, display: "flex", flexDirection: "row", justifyContent: "space-between", fontWeight: 600 },
-  footer: { position: "absolute", bottom: 20, left: 36, right: 36, fontSize: 7, color: "#777" },
+  page: { fontFamily: "NotoSans", paddingTop: 40, paddingBottom: 56, paddingHorizontal: 44, color: ink, fontSize: 10, lineHeight: 1.4 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", paddingBottom: 16, borderBottom: `1.5 solid ${ink}` },
+  organization: { fontSize: 11, fontWeight: 600 },
+  kind: { fontSize: 9, color: muted, textTransform: "uppercase", letterSpacing: 0.6 },
+  code: { fontSize: 16, fontWeight: 600, textAlign: "right" },
+  title: { fontSize: 18, fontWeight: 600, marginTop: 18, lineHeight: 1.25 },
+  facts: { flexDirection: "row", flexWrap: "wrap", marginTop: 12, gap: 0 },
+  fact: { width: "50%", paddingVertical: 3, paddingRight: 12 },
+  factLabel: { fontSize: 8, color: muted, textTransform: "uppercase", letterSpacing: 0.4 },
+  section: { marginTop: 22 },
+  heading: { fontSize: 11, fontWeight: 600, marginBottom: 6 },
+  paragraph: { color: ink },
+  note: { marginTop: 6, color: muted },
+  tableHead: { flexDirection: "row", paddingVertical: 6, borderBottom: `1 solid ${ink}`, fontSize: 8, color: muted, textTransform: "uppercase", letterSpacing: 0.4 },
+  tableRow: { flexDirection: "row", paddingVertical: 7, borderBottom: `0.75 solid ${rule}` },
+  colDescription: { width: "52%", paddingRight: 10 },
+  colQuantity: { width: "14%", textAlign: "right", paddingRight: 8 },
+  colPrice: { width: "16%", textAlign: "right", paddingRight: 8 },
+  colTotal: { width: "18%", textAlign: "right" },
+  summary: { marginTop: 10, marginLeft: "auto", width: "48%" },
+  summaryRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 3 },
+  summaryTotal: { flexDirection: "row", justifyContent: "space-between", marginTop: 6, paddingTop: 8, borderTop: `1.5 solid ${ink}`, fontSize: 12, fontWeight: 600 },
+  decision: { marginTop: 22, padding: 12, borderRadius: 6, backgroundColor: "#f1f4f1" },
+  photos: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
+  photo: { width: "49%", marginBottom: 10 },
+  photoImage: { width: "100%", height: 170, objectFit: "cover", borderRadius: 4 },
+  photoCaption: { fontSize: 8, color: muted, marginTop: 3 },
+  footer: { position: "absolute", bottom: 24, left: 44, right: 44, flexDirection: "row", justifyContent: "space-between", fontSize: 7, color: muted, borderTop: `0.75 solid ${rule}`, paddingTop: 6 },
 });
 
 type Line = { description: string; quantity: string; unit: string | null; unitPrice: string; lineTotal: string };
-export function ChangePdfDocument({ organization, project, contact, kind, code, revision, lines, decision }: {
-  organization: string; project: string; contact: string; kind: "offer" | "change"; code: string;
+export type PdfPhoto = { name: string; data: Buffer };
+
+const quantityFormat = new Intl.NumberFormat("bg-BG", { maximumFractionDigits: 3 });
+const dateFormat = new Intl.DateTimeFormat("bg-BG", { dateStyle: "long", timeZone: "Europe/Sofia" });
+const dateTimeFormat = new Intl.DateTimeFormat("bg-BG", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Sofia" });
+
+function formatDeadline(value: string | null) {
+  return value ? dateFormat.format(new Date(`${value}T12:00:00Z`)) : null;
+}
+
+export function ChangePdfDocument({ organization, project, siteAddress, contact, kind, code, revision, lines, decision, photos = [] }: {
+  organization: string; project: string; siteAddress: string; contact: string; kind: "offer" | "change"; code: string;
   revision: { title: string; description: string; reason: string | null; revisionNumber: number; changeKind: string; subtotal: string; taxAmount: string; total: string; currency: string; taxRate: string; agreedDeadline: string | null; contentHash: string | null; frozenAt: Date | null; clientNote: string | null };
-  lines: Line[]; decision: { decision: string; typedName: string; createdAt: Date } | null;
+  lines: Line[]; decision: { decision: string; typedName: string; createdAt: Date; verifiedEmail?: string | null } | null;
+  photos?: PdfPhoto[];
 }) {
-  return <Document title={`${code} · ${revision.title}`} author={organization}><Page size="A4" style={styles.page}>
-    <View style={styles.header}><Text style={styles.brand}>{organization} · MADE FLOW</Text><Text style={styles.title}>{revision.title}</Text><Text style={styles.meta}>{kind === "offer" ? "Оферта" : "Промяна"} {code} · Версия {revision.revisionNumber} · Обект: {project} · Клиент: {contact}</Text></View>
-    <View style={styles.section}><Text style={styles.heading}>Договорен обхват</Text><Text>{revision.description}</Text>{revision.reason ? <Text style={{ marginTop: 6 }}>Причина: {revision.reason}</Text> : null}{revision.clientNote ? <Text style={{ marginTop: 6 }}>Бележка: {revision.clientNote}</Text> : null}</View>
-    <View style={styles.section}><Text style={styles.heading}>Позиции</Text>{lines.length ? lines.map((line, index) => <View key={index} style={styles.row}><Text style={{ width: "58%" }}>{line.description}</Text><Text>{line.quantity} {line.unit ?? ""} × {line.unitPrice}</Text><Text>{line.lineTotal}</Text></View>) : <View style={styles.row}><Text style={{ width: "58%" }}>{revision.title}</Text><Text>1 усл.</Text><Text>{revision.changeKind === "credit" ? "−" : ""}{revision.subtotal} {revision.currency}</Text></View>}</View>
-    <View style={styles.section}><Text style={styles.heading}>Срок и цена</Text><View style={styles.row}><Text>Договорен краен срок</Text><Text>{revision.agreedDeadline ?? "Без промяна спрямо обекта"}</Text></View><View style={styles.row}><Text>Данъчна ставка</Text><Text>{revision.taxRate}%</Text></View><View style={styles.row}><Text>Данък</Text><Text>{revision.changeKind === "credit" ? "−" : ""}{revision.taxAmount} {revision.currency}</Text></View><View style={styles.total}><Text>{kind === "offer" ? "Стойност на офертата" : "Стойност на промяната"}</Text><Text>{revision.total} {revision.currency}</Text></View></View>
-    {decision ? <View style={styles.section}><Text style={styles.heading}>Решение на клиента</Text><Text>{decision.decision === "approved" ? "Одобрено" : decision.decision === "declined" ? "Отказано" : "Поискана корекция"} от {decision.typedName} на {decision.createdAt.toLocaleString("bg-BG")}</Text></View> : null}
-    <Text style={styles.footer} fixed>Изпратена версия: {revision.frozenAt?.toLocaleString("bg-BG") ?? "—"} · Отпечатък: {revision.contentHash?.slice(0, 32) ?? "—"} · Страница <Text render={({ pageNumber, totalPages }) => `${pageNumber}/${totalPages}`} /></Text>
+  const money = new Intl.NumberFormat("bg-BG", { style: "currency", currency: revision.currency.trim() || "EUR" });
+  const sign = revision.changeKind === "credit" ? "−" : "";
+  const amount = (value: string) => `${sign}${money.format(Number(value))}`;
+  const noun = kind === "offer" ? "Оферта" : "Промяна";
+  const deadline = formatDeadline(revision.agreedDeadline);
+  const rows = lines.length
+    ? lines
+    : [{ description: revision.title, quantity: "1", unit: "усл.", unitPrice: revision.subtotal, lineTotal: revision.subtotal }];
+
+  return <Document title={`${code} · ${revision.title}`} author={organization} creator="MadeFlow"><Page size="A4" style={styles.page}>
+    <View style={styles.header}>
+      <View>
+        <Text style={styles.organization}>{organization}</Text>
+        <Text style={{ color: muted, fontSize: 9 }}>Документ, създаден с MadeFlow</Text>
+      </View>
+      <View>
+        <Text style={[styles.kind, { textAlign: "right" }]}>{noun} · версия {revision.revisionNumber}</Text>
+        <Text style={styles.code}>{code}</Text>
+      </View>
+    </View>
+
+    <Text style={styles.title}>{revision.title}</Text>
+    <View style={styles.facts}>
+      <View style={styles.fact}><Text style={styles.factLabel}>Обект</Text><Text>{project}</Text></View>
+      <View style={styles.fact}><Text style={styles.factLabel}>Клиент</Text><Text>{contact}</Text></View>
+      <View style={styles.fact}><Text style={styles.factLabel}>Адрес</Text><Text>{siteAddress}</Text></View>
+      <View style={styles.fact}><Text style={styles.factLabel}>{kind === "offer" ? "Срок за изпълнение" : "Нов краен срок"}</Text><Text>{deadline ?? (kind === "offer" ? "Не е посочен" : "Без промяна")}</Text></View>
+      <View style={styles.fact}><Text style={styles.factLabel}>Изпратена</Text><Text>{revision.frozenAt ? dateFormat.format(revision.frozenAt) : "—"}</Text></View>
+    </View>
+
+    <View style={styles.section}>
+      <Text style={styles.heading}>{kind === "offer" ? "Обхват на работата" : "Какво се променя"}</Text>
+      <Text style={styles.paragraph}>{revision.description}</Text>
+      {revision.reason ? <Text style={styles.note}>Причина: {revision.reason}</Text> : null}
+      {revision.clientNote ? <Text style={styles.note}>Бележка към клиента: {revision.clientNote}</Text> : null}
+    </View>
+
+    <View style={styles.section}>
+      <View style={styles.tableHead} fixed>
+        <Text style={styles.colDescription}>Описание</Text>
+        <Text style={styles.colQuantity}>Кол.</Text>
+        <Text style={styles.colPrice}>Ед. цена</Text>
+        <Text style={styles.colTotal}>Сума</Text>
+      </View>
+      {rows.map((line, index) => (
+        <View key={index} style={styles.tableRow} wrap={false}>
+          <Text style={styles.colDescription}>{line.description}</Text>
+          <Text style={styles.colQuantity}>{quantityFormat.format(Number(line.quantity))}{line.unit ? ` ${line.unit}` : ""}</Text>
+          <Text style={styles.colPrice}>{money.format(Number(line.unitPrice))}</Text>
+          <Text style={styles.colTotal}>{amount(line.lineTotal)}</Text>
+        </View>
+      ))}
+      <View style={styles.summary} wrap={false}>
+        <View style={styles.summaryRow}><Text style={{ color: muted }}>Без ДДС</Text><Text>{amount(revision.subtotal)}</Text></View>
+        <View style={styles.summaryRow}><Text style={{ color: muted }}>ДДС {Number(revision.taxRate)}%</Text><Text>{amount(revision.taxAmount)}</Text></View>
+        <View style={styles.summaryTotal}><Text>Общо</Text><Text>{amount(revision.total)}</Text></View>
+      </View>
+    </View>
+
+    {decision ? (
+      <View style={styles.decision} wrap={false}>
+        <Text style={styles.heading}>Решение на клиента</Text>
+        <Text>{decision.decision === "approved" ? "Одобрено" : decision.decision === "declined" ? "Отказано" : "Поискана корекция"} от {decision.typedName} на {dateTimeFormat.format(decision.createdAt)}.</Text>
+        {decision.verifiedEmail ? <Text style={{ color: muted }}>Потвърдено с еднократен код, изпратен до {decision.verifiedEmail}.</Text> : null}
+      </View>
+    ) : null}
+
+    {photos.length ? (
+      <View style={styles.section} break={photos.length > 2}>
+        <Text style={styles.heading}>Снимки</Text>
+        <View style={styles.photos}>
+          {photos.map((photo, index) => (
+            <View key={index} style={styles.photo} wrap={false}>
+              {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt attribute */}
+              <Image src={photo.data} style={styles.photoImage} />
+              <Text style={styles.photoCaption}>{photo.name}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    ) : null}
+
+    <View style={styles.footer} fixed>
+      <Text>{code} · версия {revision.revisionNumber} · отпечатък {revision.contentHash?.slice(0, 16) ?? "—"}</Text>
+      <Text render={({ pageNumber, totalPages }) => `Страница ${pageNumber} от ${totalPages}`} />
+    </View>
   </Page></Document>;
 }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export function FilterSelect({ name, value, options, className }: {
   name: string;
@@ -14,8 +14,8 @@ export function FilterSelect({ name, value, options, className }: {
   return <>
     <input type="hidden" name={name} value={selected === "none" ? "" : selected} />
     <Select aria-label={name} selectedKey={selected} onSelectionChange={(key) => setSelected(String(key))}>
-      <SelectTrigger className={className ?? "h-10"}><SelectValue /></SelectTrigger>
-      <SelectContent>{options.map((option) => <SelectItem key={option.value} id={option.value}>{option.label}</SelectItem>)}</SelectContent>
+      <SelectTrigger className={className}><SelectValue /></SelectTrigger>
+      <SelectContent><SelectGroup>{options.map((option) => <SelectItem key={option.value} id={option.value}>{option.label}</SelectItem>)}</SelectGroup></SelectContent>
     </Select>
   </>;
 }

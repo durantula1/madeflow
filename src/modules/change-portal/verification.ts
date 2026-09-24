@@ -1,0 +1,101 @@
+import "server-only";
+
+import { randomInt, randomUUID, timingSafeEqual } from "node:crypto";
+
+import { and, count, eq, gt, isNull, lt, sql } from "drizzle-orm";
+
+import { getDatabase } from "@/db";
+import { portalOtps } from "@/db/schema";
+import { signPortalValue } from "@/lib/crypto/portal-token";
+import { escapeHtml, sendEmail } from "@/lib/email/send";
+
+const OTP_TTL_MS = 10 * 60 * 1000;
+const OTP_MAX_ATTEMPTS = 5;
+const OTP_SEND_WINDOW_MS = 15 * 60 * 1000;
+const OTP_MAX_SENDS = 5;
+
+type Purpose = "claim" | "email_change" | "decision";
+type Decision = "approved" | "declined" | "changes_requested";
+type Transaction = Parameters<Parameters<ReturnType<typeof getDatabase>["transaction"]>[0]>[0];
+
+const purposeText: Record<Purpose, string> = {
+  claim: "потвърждаване на имейла ти",
+  email_change: "смяна на имейла ти",
+  decision: "потвърждаване на решението ти",
+};
+
+function hashCode(id: string, code: string) {
+  return signPortalValue(`otp:${id}:${code}`);
+}
+
+export async function issueOtp(input: {
+  sessionId: number;
+  contactId: string;
+  purpose: Purpose;
+  email: string;
+  targetEmail?: string;
+  revisionId?: number;
+  decision?: Decision;
+  ip: string | null;
+  summary?: string;
+}) {
+  const db = getDatabase();
+  const [recent] = await db.select({ total: count() }).from(portalOtps)
+    .where(and(eq(portalOtps.projectContactId, input.contactId), gt(portalOtps.createdAt, new Date(Date.now() - OTP_SEND_WINDOW_MS))));
+  if ((recent?.total ?? 0) >= OTP_MAX_SENDS) throw new Error("Твърде много изпратени кодове. Опитай отново след 15 минути.");
+
+  const id = randomUUID();
+  const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
+  await db.transaction(async (tx) => {
+    await tx.update(portalOtps).set({ expiresAt: new Date() })
+      .where(and(eq(portalOtps.portalSessionId, input.sessionId), eq(portalOtps.purpose, input.purpose), isNull(portalOtps.consumedAt), gt(portalOtps.expiresAt, new Date())));
+    await tx.insert(portalOtps).values({
+      id,
+      portalSessionId: input.sessionId,
+      projectContactId: input.contactId,
+      purpose: input.purpose,
+      revisionId: input.revisionId ?? null,
+      decision: input.decision ?? null,
+      email: input.email,
+      targetEmail: input.targetEmail ?? null,
+      codeHash: hashCode(id, code),
+      expiresAt: new Date(Date.now() + OTP_TTL_MS),
+      createdIp: input.ip,
+    });
+  });
+
+  const summary = input.summary ? `<p style="margin:16px 0;padding:12px;border-radius:8px;background:#f4f4f5">${escapeHtml(input.summary)}</p>` : "";
+  await sendEmail({
+    to: input.email,
+    subject: `Код за ${purposeText[input.purpose]}: ${code}`,
+    text: `Кодът ти за ${purposeText[input.purpose]} е ${code}. Валиден е 10 минути.${input.summary ? `\n\n${input.summary}` : ""}\n\nАко не си го поискал ти, не го споделяй с никого.`,
+    html: `<p>Кодът ти за ${purposeText[input.purpose]}:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p>${summary}<p style="color:#71717a">Валиден е 10 минути. Ако не си го поискал ти, не го споделяй с никого — включително с фирмата изпълнител.</p>`,
+  });
+  return id;
+}
+
+export async function checkOtp(input: { otpId: string; code: string; sessionId: number; contactId: string; purpose: Purpose }) {
+  const [otp] = await getDatabase().update(portalOtps).set({ attempts: sql`${portalOtps.attempts} + 1` })
+    .where(and(
+      eq(portalOtps.id, input.otpId),
+      eq(portalOtps.portalSessionId, input.sessionId),
+      eq(portalOtps.projectContactId, input.contactId),
+      eq(portalOtps.purpose, input.purpose),
+      isNull(portalOtps.consumedAt),
+      gt(portalOtps.expiresAt, new Date()),
+      lt(portalOtps.attempts, OTP_MAX_ATTEMPTS),
+    ))
+    .returning();
+  if (!otp) throw new Error("Кодът е изтекъл или са изчерпани опитите. Поискай нов код.");
+  const expected = Buffer.from(otp.codeHash);
+  const actual = Buffer.from(hashCode(otp.id, input.code.trim()));
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) throw new Error("Грешен код.");
+  return otp;
+}
+
+export async function consumeOtp(tx: Transaction, otpId: string) {
+  const [consumed] = await tx.update(portalOtps).set({ consumedAt: new Date() })
+    .where(and(eq(portalOtps.id, otpId), isNull(portalOtps.consumedAt)))
+    .returning({ id: portalOtps.id });
+  if (!consumed) throw new Error("Кодът вече е използван.");
+}

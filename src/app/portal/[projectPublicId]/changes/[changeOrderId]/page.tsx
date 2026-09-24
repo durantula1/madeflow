@@ -1,10 +1,16 @@
 import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CalendarClock, CheckCircle2, Clock3, History } from "lucide-react";
+import { CalendarClock, CheckCircle2, Clock3, Download, History } from "lucide-react";
+import { PortalHeader } from "@/components/portal/portal-header";
+import { PortalChangeTabs } from "@/components/portal/change-tabs";
 import { PortalDecisionForm } from "@/components/portal/decision-form";
+import { PortalEmailVerification } from "@/components/portal/email-verification";
+import { maskEmail } from "@/lib/email/send";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AttachmentsPanel } from "@/components/change-orders/attachments-panel";
+import { listRevisionAttachments } from "@/modules/change-orders/attachment-data";
 import { documentCode, scheduleLabel } from "@/modules/change-orders/labels";
 import { getPortalChange } from "@/modules/change-portal/queries";
 
@@ -15,6 +21,14 @@ const labels: Record<string, string> = {
   declined: "Отказана",
   changes_requested: "Поискана промяна",
 };
+const eventLabels: Record<string, string> = {
+  revision_sent: "Изпратена за решение",
+  decision_approved: "Одобрена",
+  decision_declined: "Отказана",
+  decision_changes_requested: "Поискана промяна",
+  decision_disputed: "Решението е оспорено от клиента",
+};
+
 export default async function PortalChangePage({
   params,
   searchParams,
@@ -26,183 +40,232 @@ export default async function PortalChangePage({
   const data = await getPortalChange(projectPublicId, changeOrderId);
   if (!data) notFound();
   const change = data.change;
-  return (
+  const attachments = change.frozenAt ? await listRevisionAttachments(change.revisionId) : [];
+  const money = (value: string | number) => Number(value).toFixed(2);
+  const isOffer = change.documentKind === "offer";
+  const awaitingDecision = ["sent", "viewed"].includes(change.status) && data.session.contactRole === "approver";
+  const dateTime = (value: Date, dateStyle: "long" | "medium" = "medium") =>
+    new Intl.DateTimeFormat("bg-BG", { dateStyle, timeStyle: "short" }).format(value);
+
+  const details = (
     <>
-      <Link
-        href={`/portal/${projectPublicId}`}
-        className="text-sm text-muted-foreground"
-      >
-        ← Към обекта
-      </Link>
-      {query.decision && (
-        <div className="mt-4 rounded-xl bg-primary/10 p-4 text-sm font-medium text-primary">
-          Решението е записано успешно. И двете страни виждат същата версия и
-          timestamp.
-        </div>
-      )}
-      <div className="mt-5 flex items-start justify-between gap-4">
-        <div>
-          <p className="font-mono text-xs text-muted-foreground">
-            {documentCode(change.documentKind, change.sequenceNumber)} · версия{" "}
-            {change.revisionNumber}
-          </p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-            {change.title}
-          </h1>
-        </div>
-        <Badge variant={change.status === "approved" ? "default" : "secondary"}>
-          {labels[change.status] ?? change.status}
-        </Badge>
-      </div>
-      {change.frozenAt ? <a href={`/api/changes/${change.id}/pdf?revision=${change.revisionId}`} className="mt-4 inline-flex rounded-xl border px-4 py-2 text-sm font-semibold">Свали PDF</a> : null}
-      <Card className="mt-6">
-        <CardContent className="space-y-6">
-          <section>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {change.documentKind === "offer"
-                ? "Какво включва"
-                : "Какво се променя"}
-            </p>
-            <p className="mt-2 text-base leading-7">{change.description}</p>
-          </section>
-          {change.reason && (
-            <section>
+      <Card>
+        <CardContent className="space-y-5">
+          <div className="grid gap-5 sm:grid-cols-2">
+            <section className={change.reason ? undefined : "sm:col-span-2"}>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Защо е необходимо
+                {isOffer ? "Какво включва" : "Какво се променя"}
               </p>
-              <p className="mt-2 leading-7">{change.reason}</p>
+              <p className="mt-1.5 leading-7">{change.description}</p>
             </section>
-          )}
+            {change.reason && (
+              <section>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Защо е необходимо
+                </p>
+                <p className="mt-1.5 leading-7">{change.reason}</p>
+              </section>
+            )}
+          </div>
           {data.lineItems.length ? (
             <section className="overflow-hidden rounded-xl border">
-              {data.lineItems.map((line) => (
-                <div
-                  key={line.id}
-                  className="grid grid-cols-[1fr_auto] gap-3 border-b px-3 py-3 text-sm last:border-b-0"
-                >
-                  <div>
-                    <p>{line.description}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {Number(line.quantity)} {line.unit} ×{" "}
-                      {Number(line.unitPrice).toFixed(2)}
-                    </p>
-                  </div>
-                  <p className="font-medium">
-                    {Number(line.lineTotal).toFixed(2)}
-                  </p>
-                </div>
-              ))}
+              <table className="w-full text-sm">
+                <thead className="hidden bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground sm:table-header-group">
+                  <tr>
+                    <th className="px-3 py-2 font-semibold">Позиция</th>
+                    <th className="px-3 py-2 text-right font-semibold">Количество</th>
+                    <th className="px-3 py-2 text-right font-semibold">Ед. цена</th>
+                    <th className="px-3 py-2 text-right font-semibold">Сума</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {data.lineItems.map((line) => (
+                    <tr key={line.id} className="align-top">
+                      <td className="px-3 py-2.5">
+                        <p>{line.description}</p>
+                        <p className="text-xs text-muted-foreground sm:hidden">
+                          {Number(line.quantity)} {line.unit} × {money(line.unitPrice)}
+                        </p>
+                      </td>
+                      <td className="hidden px-3 py-2.5 text-right tabular-nums text-muted-foreground sm:table-cell">
+                        {Number(line.quantity)} {line.unit}
+                      </td>
+                      <td className="hidden px-3 py-2.5 text-right tabular-nums text-muted-foreground sm:table-cell">
+                        {money(line.unitPrice)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-medium tabular-nums">
+                        {money(line.lineTotal)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-t bg-muted/30 text-muted-foreground">
+                  <tr>
+                    <td colSpan={3} className="px-3 pt-2.5 text-right">Основа</td>
+                    <td className="px-3 pt-2.5 text-right tabular-nums text-foreground">{money(change.subtotal)}</td>
+                  </tr>
+                  <tr>
+                    <td colSpan={3} className="px-3 pb-2.5 text-right">ДДС {change.taxRate}%</td>
+                    <td className="px-3 pb-2.5 text-right tabular-nums text-foreground">{money(Number(change.total) - Number(change.subtotal))}</td>
+                  </tr>
+                </tfoot>
+              </table>
             </section>
           ) : null}
-          <div className="rounded-2xl bg-sidebar p-5 text-sidebar-foreground">
-            <p className="text-sm text-white/60">{change.documentKind === "offer" ? "Стойност на офертата с ДДС" : "Стойност на промяната с ДДС"}</p>
-            <p className="mt-2 text-4xl font-semibold tracking-tight">
-              {Number(change.total).toFixed(2)} {change.currency}
-            </p>
-            <p className="mt-2 text-xs text-white/50">
-              Основа {Number(change.subtotal).toFixed(2)} · ДДС {change.taxRate}
-              %
-            </p>
-          </div>
-          <div className="rounded-xl border p-4">
-            <p className="text-sm text-muted-foreground">
-              {change.documentKind === "offer" ? "Срок" : "Отражение върху срока"}
-            </p>
-            <p className="mt-2 flex items-center gap-2 font-semibold">
-              <CalendarClock className="size-5 text-primary" />
-              {scheduleLabel(
-                change.documentKind,
-                change.scheduleImpactType,
-                change.scheduleImpactDays,
-                change.agreedDeadline,
-              )}
-            </p>
-          </div>
           {change.clientNote && (
             <p className="rounded-xl bg-muted p-4 text-sm">
               {change.clientNote}
             </p>
           )}
-          <p className="text-xs text-muted-foreground">
-            Замразена версия:{" "}
-            {change.frozenAt
-              ? new Intl.DateTimeFormat("bg-BG", {
-                  dateStyle: "long",
-                  timeStyle: "short",
-                }).format(change.frozenAt)
-              : "—"}
-          </p>
         </CardContent>
       </Card>
-      {["sent", "viewed"].includes(change.status) &&
-      data.session.contactRole === "approver" ? (
-        <Card className="mt-5">
-          <CardHeader>
-            <CardTitle>Твоето решение</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <PortalDecisionForm
-              projectPublicId={projectPublicId}
-              changeOrderId={change.id}
-              revisionId={change.revisionId}
-              total={change.total}
-              currency={change.currency}
-              revisionNumber={change.revisionNumber}
-              idempotencyKey={randomUUID()}
-            />
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="mt-5">
-          <CardContent className="flex items-start gap-3">
-            <CheckCircle2 className="mt-0.5 size-5 text-primary" />
-            <div>
-              <p className="font-medium">Решението е записано</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {data.decision
-                  ? `${data.decision.typedName} · ${new Intl.DateTimeFormat("bg-BG", { dateStyle: "medium", timeStyle: "short" }).format(data.decision.createdAt)}`
-                  : "Тази версия вече не очаква решение."}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-      <Card className="mt-5">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <History className="size-4" /> История
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2 border-b pb-4">{data.revisions.filter((revision) => revision.frozenAt).map((revision) => <a key={revision.id} href={`/api/changes/${change.id}/pdf?revision=${revision.id}`} className="block text-sm font-medium text-primary underline">Версия {revision.revisionNumber} · {revision.total} {revision.currency} · PDF</a>)}</div>
+      {attachments.length ? (
+        <AttachmentsPanel changeOrderId={change.id} initial={attachments} editable={false} description="Снимки и документи към тази версия. Отвори ги, за да ги видиш в пълен размер." />
+      ) : null}
+    </>
+  );
+
+  const decision = awaitingDecision ? (
+    <Card>
+      <CardHeader>
+        <CardTitle>Твоето решение</CardTitle>
+      </CardHeader>
+      <CardContent className={data.session.contactEmailVerifiedAt ? "grid items-start gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]" : "space-y-4"}>
+        <PortalEmailVerification
+          projectPublicId={projectPublicId}
+          maskedEmail={data.session.contactEmail ? maskEmail(data.session.contactEmail) : null}
+          hasEmail={!!data.session.contactEmail}
+          verified={!!data.session.contactEmailVerifiedAt}
+        />
+        {data.session.contactEmailVerifiedAt ? (
+          <PortalDecisionForm
+            projectPublicId={projectPublicId}
+            changeOrderId={change.id}
+            revisionId={change.revisionId}
+            total={change.total}
+            currency={change.currency}
+            revisionNumber={change.revisionNumber}
+            idempotencyKey={randomUUID()}
+          />
+        ) : null}
+      </CardContent>
+    </Card>
+  ) : (
+    <Card>
+      <CardContent className="flex items-start gap-3">
+        <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary" />
+        <div>
+          <p className="font-medium">
+            {data.decision ? "Решението е записано" : "Тази версия не очаква решение"}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {data.decision
+              ? `${data.decision.typedName} · ${dateTime(data.decision.createdAt)}${data.decision.verifiedEmail ? ` · потвърдено с код до ${maskEmail(data.decision.verifiedEmail)}` : ""}`
+              : data.session.contactRole === "approver"
+                ? "Статус: " + (labels[change.status] ?? change.status)
+                : "Решението се взима от одобряващия контакт по обекта."}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  const history = (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <History className="size-4" /> История
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {data.revisions.some((revision) => revision.frozenAt) ? (
+          <div className="flex flex-wrap gap-2 border-b pb-4">
+            {data.revisions.filter((revision) => revision.frozenAt).map((revision) => (
+              <a key={revision.id} href={`/api/changes/${change.id}/pdf?revision=${revision.id}`} className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium text-primary transition hover:bg-primary/5">
+                <Download className="size-3.5" /> Версия {revision.revisionNumber} · {money(revision.total)} {revision.currency}
+              </a>
+            ))}
+          </div>
+        ) : null}
+        <ol className="space-y-3">
           {data.events.map((event) => (
-            <div key={event.id} className="flex gap-3">
+            <li key={event.id} className="flex gap-3">
               <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
                 <Clock3 className="size-4" />
               </span>
               <div>
-                <p className="text-sm font-medium">
-                  {event.eventType === "revision_sent"
-                    ? "Изпратена за решение"
-                    : event.eventType === "decision_approved"
-                      ? "Одобрена"
-                      : event.eventType === "decision_declined"
-                        ? "Отказана"
-                        : event.eventType === "decision_changes_requested"
-                          ? "Поискана промяна"
-                          : event.eventType}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {new Intl.DateTimeFormat("bg-BG", {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  }).format(event.createdAt)}
-                </p>
+                <p className="text-sm font-medium">{eventLabels[event.eventType] ?? event.eventType}</p>
+                <p className="text-xs text-muted-foreground">{dateTime(event.createdAt)}</p>
               </div>
-            </div>
+            </li>
           ))}
-        </CardContent>
-      </Card>
+        </ol>
+      </CardContent>
+    </Card>
+  );
+
+  const summary = (
+    <div className="rounded-2xl bg-sidebar p-5 text-sidebar-foreground shadow-sm">
+      <p className="text-sm text-white/60">{isOffer ? "Стойност на офертата с ДДС" : "Стойност на промяната с ДДС"}</p>
+      <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums text-white">
+        {money(change.total)} <span className="text-xl text-white/70">{change.currency}</span>
+      </p>
+      <p className="mt-1 text-xs text-white/50">
+        Основа {money(change.subtotal)} · ДДС {change.taxRate}%
+      </p>
+      <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-sidebar-border pt-4 text-sm">
+        <CalendarClock className="size-4 shrink-0 text-primary" />
+        <span className="text-white/60">{isOffer ? "Срок" : "Отражение върху срока"}:</span>
+        <span className="font-semibold text-white">
+          {scheduleLabel(change.documentKind, change.scheduleImpactType, change.scheduleImpactDays, change.agreedDeadline)}
+        </span>
+      </div>
+      <p className="mt-2 text-xs text-white/45">
+        Замразена версия: {change.frozenAt ? dateTime(change.frozenAt, "long") : "—"}
+      </p>
+    </div>
+  );
+
+  return (
+    <>
+      <Link
+        href={`/portal/${projectPublicId}?tab=documents`}
+        className="text-sm text-muted-foreground hover:text-foreground"
+      >
+        ← Към обекта
+      </Link>
+      {query.decision && (
+        <div className="mt-3 rounded-xl bg-primary/10 p-4 text-sm font-medium text-primary">
+          Решението е записано успешно. И двете страни виждат същата версия и
+          timestamp.
+        </div>
+      )}
+      <div className="mt-3">
+        <PortalHeader
+          eyebrow={<>{isOffer ? "Оферта" : "Промяна"} · <span className="font-mono">{documentCode(change.documentKind, change.sequenceNumber)}</span> · версия {change.revisionNumber}</>}
+          title={change.title}
+          meta={<>{data.project.organizationName} · {data.project.name}</>}
+          aside={
+            <div className="flex flex-col items-end gap-3">
+              <Badge variant={change.status === "approved" ? "default" : "secondary"}>{labels[change.status] ?? change.status}</Badge>
+              {change.frozenAt ? (
+                <a href={`/api/changes/${change.id}/pdf?revision=${change.revisionId}`} className="inline-flex h-9 items-center gap-2 rounded-lg border border-sidebar-border bg-white/5 px-3 text-sm font-medium text-sidebar-foreground transition hover:bg-white/10">
+                  <Download className="size-4" /> <span className="hidden sm:inline">Свали</span> PDF
+                </a>
+              ) : null}
+            </div>
+          }
+        />
+      </div>
+      <div className="mt-5">
+        <PortalChangeTabs
+          details={details}
+          decision={decision}
+          history={history}
+          summary={summary}
+          pending={awaitingDecision}
+        />
+      </div>
     </>
   );
 }

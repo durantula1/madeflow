@@ -9,18 +9,16 @@ export function Wordmark({
 }: {
   inverse?: boolean;
   className?: string;
-  href?: string;
+  href?: string | null;
 }) {
-  return (
-    <Link
-      href={href ?? (inverse ? "/app" : "/")}
-      className={cn("inline-flex items-center gap-2.5", className)}
-    >
+  const content = (
+    <>
       <Image
         src="/madeflow-mark.svg"
         alt=""
         width={36}
         height={36}
+        loading="eager"
         className="size-9 shrink-0"
       />
       <span
@@ -34,6 +32,14 @@ export function Wordmark({
           Flow
         </span>
       </span>
+    </>
+  );
+  const classes = cn("inline-flex items-center gap-2.5", className);
+
+  if (href === null) return <span className={classes}>{content}</span>;
+  return (
+    <Link href={href ?? (inverse ? "/app" : "/")} className={classes}>
+      {content}
     </Link>
   );
 }

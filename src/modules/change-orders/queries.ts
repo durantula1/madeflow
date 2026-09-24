@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, exists, ilike, inArray, isNotNull, isNull, or } from "drizzle-orm";
+import { and, asc, desc, eq, exists, ilike, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 
 import { getDatabase } from "@/db";
 import {
@@ -13,15 +13,18 @@ import {
   projects,
   timelineEvents,
 } from "@/db/schema";
+import { can } from "@/lib/authz/permissions";
+import { seesAllProjects } from "@/lib/authz/project-access";
 import type { TenantContext } from "@/lib/authz/tenant-context";
 
 export async function listChangeOrders(input: {
   context: TenantContext;
   projectId?: string;
+  baselineOfferId?: string;
   documentKind?: "offer" | "change";
   query?: string;
   status?: "draft" | "sent" | "viewed" | "approved" | "declined" | "changes_requested";
-  limit?: number;
+  limit: number;
   offset?: number;
 }) {
   const db = getDatabase();
@@ -47,45 +50,64 @@ export async function listChangeOrders(input: {
       changeOrderRevisions,
       eq(changeOrderRevisions.id, changeOrders.currentRevisionId),
     )
-    .where(
-      and(
-        eq(changeOrders.organizationId, input.context.organizationId),
-        input.context.role === "owner" ? undefined : exists(db.select({ id: projectMembers.projectId }).from(projectMembers).where(and(eq(projectMembers.projectId, changeOrders.projectId), eq(projectMembers.userId, input.context.userId)))),
-        input.context.role === "field" ? or(isNotNull(changeOrderRevisions.frozenAt), eq(changeOrderRevisions.createdBy, input.context.userId)) : undefined,
-        input.projectId
-          ? eq(changeOrders.projectId, input.projectId)
-          : undefined,
-        input.documentKind
-          ? eq(changeOrders.documentKind, input.documentKind)
-          : undefined,
-        input.status ? eq(changeOrderRevisions.status, input.status) : undefined,
-        input.query ? or(
-          ilike(changeOrderRevisions.title, `%${input.query}%`),
-          ilike(projects.name, `%${input.query}%`),
-        ) : undefined,
-        isNull(changeOrders.archivedAt),
-      ),
-    )
+    .where(changeOrderFilters(input))
     .orderBy(desc(changeOrders.updatedAt))
-    .limit(input.limit ?? 100)
+    .limit(input.limit)
     .offset(input.offset ?? 0);
 }
 
-export async function getDocumentKind(
-  organizationId: string,
-  changeOrderId: string,
-) {
-  const [row] = await getDatabase()
-    .select({ documentKind: changeOrders.documentKind })
+function changeOrderFilters(input: {
+  context: TenantContext;
+  projectId?: string;
+  baselineOfferId?: string;
+  documentKind?: "offer" | "change";
+  query?: string;
+  status?: "draft" | "sent" | "viewed" | "approved" | "declined" | "changes_requested";
+}) {
+  const db = getDatabase();
+  return and(
+    eq(changeOrders.organizationId, input.context.organizationId),
+    seesAllProjects(input.context) ? undefined : exists(db.select({ id: projectMembers.projectId }).from(projectMembers).where(and(eq(projectMembers.projectId, changeOrders.projectId), eq(projectMembers.userId, input.context.userId)))),
+    !can(input.context, "drafts.view_all") ? or(isNotNull(changeOrderRevisions.frozenAt), eq(changeOrderRevisions.createdBy, input.context.userId)) : undefined,
+    input.projectId ? eq(changeOrders.projectId, input.projectId) : undefined,
+    input.baselineOfferId ? eq(changeOrders.baselineOfferId, input.baselineOfferId) : undefined,
+    input.documentKind ? eq(changeOrders.documentKind, input.documentKind) : undefined,
+    input.status ? eq(changeOrderRevisions.status, input.status) : undefined,
+    input.query ? or(ilike(changeOrderRevisions.title, `%${input.query}%`), ilike(projects.name, `%${input.query}%`)) : undefined,
+    isNull(changeOrders.archivedAt),
+  );
+}
+
+export async function countChangeOrders(input: {
+  context: TenantContext;
+  projectId?: string;
+  baselineOfferId?: string;
+  documentKind?: "offer" | "change";
+  query?: string;
+  status?: "draft" | "sent" | "viewed" | "approved" | "declined" | "changes_requested";
+}) {
+  const [row] = await getDatabase().select({ total: sql<number>`count(*)::int` })
     .from(changeOrders)
-    .where(
-      and(
-        eq(changeOrders.id, changeOrderId),
-        eq(changeOrders.organizationId, organizationId),
-      ),
-    )
-    .limit(1);
-  return row?.documentKind ?? null;
+    .innerJoin(projects, eq(projects.id, changeOrders.projectId))
+    .leftJoin(changeOrderRevisions, eq(changeOrderRevisions.id, changeOrders.currentRevisionId))
+    .where(changeOrderFilters(input));
+  return row?.total ?? 0;
+}
+
+export async function countChangesByOffer(context: TenantContext, offerIds: string[]) {
+  if (!offerIds.length) return new Map<string, { total: number; pending: number }>();
+  const rows = await getDatabase()
+    .select({
+      offerId: changeOrders.baselineOfferId,
+      total: sql<number>`count(*)::int`,
+      pending: sql<number>`count(*) filter (where ${changeOrderRevisions.status} in ('sent', 'viewed'))::int`,
+    })
+    .from(changeOrders)
+    .innerJoin(projects, eq(projects.id, changeOrders.projectId))
+    .leftJoin(changeOrderRevisions, eq(changeOrderRevisions.id, changeOrders.currentRevisionId))
+    .where(and(changeOrderFilters({ context, documentKind: "change" }), inArray(changeOrders.baselineOfferId, offerIds)))
+    .groupBy(changeOrders.baselineOfferId);
+  return new Map(rows.map((row) => [row.offerId!, { total: row.total, pending: row.pending }]));
 }
 
 export async function listApprovedOffers(
@@ -108,7 +130,7 @@ export async function listApprovedOffers(
     .where(
       and(
         eq(changeOrders.organizationId, context.organizationId),
-        context.role === "owner" ? undefined : exists(db.select({ id: projectMembers.projectId }).from(projectMembers).where(and(eq(projectMembers.projectId, changeOrders.projectId), eq(projectMembers.userId, context.userId)))),
+        seesAllProjects(context) ? undefined : exists(db.select({ id: projectMembers.projectId }).from(projectMembers).where(and(eq(projectMembers.projectId, changeOrders.projectId), eq(projectMembers.userId, context.userId)))),
         eq(changeOrders.documentKind, "offer"),
         eq(changeOrderRevisions.status, "approved"),
         projectId ? eq(changeOrders.projectId, projectId) : undefined,
@@ -118,9 +140,14 @@ export async function listApprovedOffers(
     .orderBy(desc(changeOrders.updatedAt));
 }
 
+/** Timeline events shown per page on the document screen. */
+export const TIMELINE_PAGE_SIZE = 30;
+
 export async function getChangeOrder(
   organizationId: string,
   changeOrderId: string,
+  /** `eventsBefore`: id of the oldest event already shown; loads the page of events before it (keyset on created_at, id). */
+  options: { eventsBefore?: number } = {},
 ) {
   const [change] = await getDatabase()
     .select({
@@ -128,6 +155,7 @@ export async function getChangeOrder(
       createdBy: changeOrders.createdBy,
       sequenceNumber: changeOrders.sequenceNumber,
       documentKind: changeOrders.documentKind,
+      baselineOfferId: changeOrders.baselineOfferId,
       lifecycleStatus: changeOrders.lifecycleStatus,
       workStatus: changeOrders.workStatus,
       projectId: projects.id,
@@ -137,6 +165,7 @@ export async function getChangeOrder(
       contactId: projectContacts.id,
       contactName: projectContacts.name,
       contactRole: projectContacts.portalRole,
+      contactEmailVerifiedAt: projectContacts.emailVerifiedAt,
       revisionId: changeOrderRevisions.id,
       revisionCreatedBy: changeOrderRevisions.createdBy,
       revisionNumber: changeOrderRevisions.revisionNumber,
@@ -182,7 +211,7 @@ export async function getChangeOrder(
 
   if (!change) return null;
 
-  const [revisions, events, decision, lineItems] = await Promise.all([
+  const [revisions, eventRows, disputeEvent, decision, lineItems, baselineOffer] = await Promise.all([
     getDatabase()
       .select()
       .from(changeOrderRevisions)
@@ -191,9 +220,23 @@ export async function getChangeOrder(
     getDatabase()
       .select()
       .from(timelineEvents)
-      .where(eq(timelineEvents.changeOrderId, changeOrderId))
+      .where(and(
+        eq(timelineEvents.changeOrderId, changeOrderId),
+        // Row comparison against the cursor event's own values keeps full timestamp precision.
+        options.eventsBefore !== undefined
+          ? sql`(${timelineEvents.createdAt}, ${timelineEvents.id}) < (select c.created_at, c.id from app.timeline_events c where c.id = ${options.eventsBefore} and c.change_order_id = ${changeOrderId})`
+          : undefined,
+      ))
       .orderBy(desc(timelineEvents.createdAt), desc(timelineEvents.id))
-      .limit(30),
+      .limit(TIMELINE_PAGE_SIZE + 1),
+    // Looked up on its own so the dispute banner does not depend on which timeline page is open.
+    getDatabase()
+      .select()
+      .from(timelineEvents)
+      .where(and(eq(timelineEvents.changeOrderId, changeOrderId), eq(timelineEvents.eventType, "decision_disputed"), eq(timelineEvents.revisionId, change.revisionId)))
+      .orderBy(desc(timelineEvents.createdAt), desc(timelineEvents.id))
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
     getDatabase()
       .select()
       .from(portalDecisions)
@@ -205,43 +248,19 @@ export async function getChangeOrder(
       .from(changeOrderLineItems)
       .where(eq(changeOrderLineItems.revisionId, change.revisionId))
       .orderBy(asc(changeOrderLineItems.position)),
+    change.baselineOfferId
+      ? getDatabase()
+        .select({ id: changeOrders.id, sequenceNumber: changeOrders.sequenceNumber, title: changeOrderRevisions.title })
+        .from(changeOrders)
+        .innerJoin(changeOrderRevisions, eq(changeOrderRevisions.id, changeOrders.currentRevisionId))
+        .where(and(eq(changeOrders.id, change.baselineOfferId), eq(changeOrders.organizationId, organizationId)))
+        .limit(1)
+        .then((rows) => rows[0] ?? null)
+      : Promise.resolve(null),
   ]);
 
-  return { ...change, revisions, events, decision, lineItems };
-}
-
-const decisionEvents = [
-  "decision_approved",
-  "decision_declined",
-  "decision_changes_requested",
-] as const;
-
-export async function listDecisionNotifications(organizationId: string) {
-  return getDatabase()
-    .select({
-      id: timelineEvents.id,
-      eventType: timelineEvents.eventType,
-      createdAt: timelineEvents.createdAt,
-      metadata: timelineEvents.metadata,
-      changeOrderId: changeOrders.id,
-      sequenceNumber: changeOrders.sequenceNumber,
-      documentKind: changeOrders.documentKind,
-      title: changeOrderRevisions.title,
-      projectName: projects.name,
-    })
-    .from(timelineEvents)
-    .innerJoin(changeOrders, eq(changeOrders.id, timelineEvents.changeOrderId))
-    .innerJoin(projects, eq(projects.id, timelineEvents.projectId))
-    .leftJoin(
-      changeOrderRevisions,
-      eq(changeOrderRevisions.id, changeOrders.currentRevisionId),
-    )
-    .where(
-      and(
-        eq(timelineEvents.organizationId, organizationId),
-        inArray(timelineEvents.eventType, [...decisionEvents]),
-      ),
-    )
-    .orderBy(desc(timelineEvents.createdAt), desc(timelineEvents.id))
-    .limit(50);
+  const hasOlderEvents = eventRows.length > TIMELINE_PAGE_SIZE;
+  // Newest first; the last row is the cursor for "По-стари събития".
+  const events = eventRows.slice(0, TIMELINE_PAGE_SIZE);
+  return { ...change, revisions, events, hasOlderEvents, disputeEvent, decision, lineItems, baselineOffer };
 }

@@ -151,3 +151,22 @@
     background-size: 32px 32px;
   }
 }
+
+/* Skeleton bars stay invisible for the first 150ms, so fast (prefetched) navigations never flash a placeholder. */
+@keyframes skeleton-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes skeleton-pulse {
+  50% { opacity: 0.5; }
+}
+.skeleton {
+  animation:
+    skeleton-in 200ms ease-out 150ms both,
+    skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) 350ms infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: skeleton-in 1ms linear 150ms both;
+  }
+}

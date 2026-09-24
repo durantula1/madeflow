@@ -12,7 +12,7 @@ import {
   timelineEvents,
 } from "@/db/schema";
 import { requireTenantContext } from "@/lib/authz/tenant-context";
-import { getCurrentMember } from "@/lib/authz/project-access";
+import { requirePermission } from "@/lib/authz/project-access";
 
 const projectSchema = z.object({
   name: z.string().trim().min(2, "Въведи име на обекта.").max(160),
@@ -26,8 +26,7 @@ const projectSchema = z.object({
 export async function createProjectAction(formData: FormData) {
   const data = projectSchema.parse(Object.fromEntries(formData));
   const context = await requireTenantContext();
-  const member = await getCurrentMember(context);
-  if (member.role !== "owner" && member.role !== "office") throw new Error("Нямаш право да създаваш обекти.");
+  await requirePermission(context, "projects.create");
   const database = getDatabase();
 
   const projectId = await database.transaction(async (transaction) => {
@@ -46,7 +45,7 @@ export async function createProjectAction(formData: FormData) {
     await transaction.insert(projectMembers).values({
       projectId: project.id,
       userId: context.userId,
-      permission: "manage",
+      permission: "view",
     });
     await transaction.insert(projectContacts).values({
       projectId: project.id,

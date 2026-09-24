@@ -1,41 +1,122 @@
+import { Search } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { FilterSelect } from "@/components/workspace/filter-select";
+import { ProjectCombobox, type ProjectOption } from "@/components/workspace/project-combobox";
+import { lastPage, PAGE_SIZE, pageHref } from "@/lib/pagination";
+import { cn } from "@/lib/utils";
 
-export function ListFilters({ query, status, statusOptions, projectId, projects, placeholder }: {
-  query: string;
-  status: string;
-  statusOptions: { value: string; label: string }[];
-  projectId?: string;
-  projects?: { id: string; name: string }[];
-  placeholder: string;
-}) {
-  return <form className="mt-6 flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
-    <Field className="min-w-52 flex-1"><FieldLabel htmlFor="list-search">Търси</FieldLabel><Input id="list-search" name="q" defaultValue={query} placeholder={placeholder} className="h-10" /></Field>
-    {projects ? <Field className="min-w-44 flex-1"><FieldLabel>Обект</FieldLabel><FilterSelect name="projectId" value={projectId ?? "all"} options={[{ value: "all", label: "Всички обекти" }, ...projects.map((project) => ({ value: project.id, label: project.name }))]} /></Field> : null}
-    <Field className="min-w-44 flex-1"><FieldLabel>Статус</FieldLabel><FilterSelect name="status" value={status} options={statusOptions} /></Field>
-    <Button type="submit" variant="outline" className="h-10">Приложи</Button>
+const filterBarClassName = "flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4";
+const searchFieldClassName = "min-w-48 flex-1 max-sm:basis-full";
+const projectFieldClassName = "w-full sm:w-56";
+const statusFieldClassName = "min-w-0 flex-1 sm:w-48 sm:flex-none";
+
+export function FilterBar({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <form className={cn(filterBarClassName, className)}>
+    {children}
+    <Button type="submit" variant="outline">Филтрирай</Button>
   </form>;
 }
 
-export function ListPagination({ path, params, page, hasNext }: {
-  path: string;
-  params: Record<string, string>;
-  page: number;
-  hasNext: boolean;
+export type FilterFieldShape = { label: string; className: string };
+
+/** `FilterBar` with real labels and placeholder inputs; list the fields with the same labels and widths. */
+export function FilterBarSkeleton({ fields, className }: { fields: FilterFieldShape[]; className?: string }) {
+  return <div className={cn(filterBarClassName, className)}>
+    {fields.map((field) => <Field key={field.label} className={field.className}>
+      <FieldLabel>{field.label}</FieldLabel>
+      <Skeleton className="h-8 w-full rounded-lg" />
+    </Field>)}
+    <Skeleton className="h-8 w-24 rounded-lg" />
+  </div>;
+}
+
+export function SearchField({ id = "list-search", label = "Търси", query, placeholder }: {
+  id?: string;
+  label?: string;
+  query: string;
+  placeholder: string;
 }) {
-  if (page === 1 && !hasNext) return null;
-  const href = (target: number) => {
-    const search = new URLSearchParams(params);
-    search.set("page", String(target));
-    return `${path}?${search}`;
-  };
-  return <nav aria-label="Страници" className="mt-5 flex items-center justify-between text-sm">
-    {page > 1 ? <Link className="rounded-lg border px-4 py-2 hover:bg-muted" href={href(page - 1)}>← Предишна</Link> : <span />}
-    <span className="text-muted-foreground">Страница {page}</span>
-    {hasNext ? <Link className="rounded-lg border px-4 py-2 hover:bg-muted" href={href(page + 1)}>Следваща →</Link> : <span />}
+  return <Field className={searchFieldClassName}>
+    <FieldLabel htmlFor={id}>{label}</FieldLabel>
+    <div className="relative">
+      <Search className="pointer-events-none absolute top-2 left-2.5 size-4 text-muted-foreground" />
+      <Input id={id} name="q" defaultValue={query} placeholder={placeholder} className="pl-8" />
+    </div>
+  </Field>;
+}
+
+export function ListFilters({ query, status, statusOptions, projectFilter, project, placeholder, label, className }: {
+  query: string;
+  status: string;
+  statusOptions: { value: string; label: string }[];
+  /** Show the searchable project filter; `project` is the currently selected one. */
+  projectFilter?: boolean;
+  project?: ProjectOption | null;
+  placeholder: string;
+  label?: string;
+  className?: string;
+}) {
+  return <FilterBar className={className}>
+    <SearchField query={query} placeholder={placeholder} label={label} />
+    {projectFilter ? <Field className={projectFieldClassName}><FieldLabel>Обект</FieldLabel><ProjectCombobox key={project?.id ?? "all"} name="projectId" defaultValue={project} allLabel="Всички обекти" /></Field> : null}
+    <Field className={statusFieldClassName}><FieldLabel>Статус</FieldLabel><FilterSelect name="status" value={status} options={statusOptions} /></Field>
+  </FilterBar>;
+}
+
+export function ListFiltersSkeleton({ projectFilter, label = "Търси", className }: {
+  projectFilter?: boolean;
+  label?: string;
+  className?: string;
+}) {
+  return <FilterBarSkeleton className={className} fields={[
+    { label, className: searchFieldClassName },
+    ...(projectFilter ? [{ label: "Обект", className: projectFieldClassName }] : []),
+    { label: "Статус", className: statusFieldClassName },
+  ]} />;
+}
+
+const paginationClassName = "flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm";
+
+export function ListPaginationSkeleton() {
+  return <div className={paginationClassName}>
+    <div className="flex h-5 items-center"><Skeleton className="h-3.5 w-20" /></div>
+    <div className="flex items-center gap-1">{Array.from({ length: 3 }, (_, index) => <Skeleton key={index} className="h-8 w-14 rounded-lg" />)}</div>
+  </div>;
+}
+
+export function ListPagination({ path, params, page, total, pageSize = PAGE_SIZE, pageParam = "page" }: {
+  path: string;
+  params: Record<string, string | undefined>;
+  page: number;
+  total: number;
+  pageSize?: number;
+  /** Search param holding the page number; set it when one screen has several paginated lists. */
+  pageParam?: string;
+}) {
+  if (total === 0) return null;
+  const pages = lastPage(total, pageSize);
+  const current = Math.min(page, pages);
+  const from = (current - 1) * pageSize + 1;
+  const to = Math.min(current * pageSize, total);
+  const href = (target: number) => pageHref(path, params, pageParam, target);
+  const numbers = [...new Set([1, pages, current - 1, current, current + 1].filter((item) => item >= 1 && item <= pages))].sort((left, right) => left - right);
+  return <nav aria-label="Страници" className={paginationClassName}>
+    <p className="text-muted-foreground">{from}–{to} от {total}</p>
+    <div className="flex items-center gap-1">
+      {current > 1 ? <Link className="inline-flex h-8 items-center rounded-lg border px-2.5 hover:bg-muted" href={href(current - 1)}>Назад</Link> : <span className="inline-flex h-8 items-center rounded-lg border px-2.5 text-muted-foreground">Назад</span>}
+      {numbers.map((number, index) => {
+        const previous = numbers[index - 1];
+        return <span key={number} className="flex items-center gap-1">
+          {previous && number - previous > 1 ? <span className="px-1 text-muted-foreground">…</span> : null}
+          <Link href={href(number)} aria-current={number === current ? "page" : undefined} className={`inline-flex size-8 items-center justify-center rounded-lg border ${number === current ? "border-primary bg-primary text-primary-foreground" : "hover:bg-muted"}`}>{number}</Link>
+        </span>;
+      })}
+      {current < pages ? <Link className="inline-flex h-8 items-center rounded-lg border px-2.5 hover:bg-muted" href={href(current + 1)}>Напред</Link> : <span className="inline-flex h-8 items-center rounded-lg border px-2.5 text-muted-foreground">Напред</span>}
+    </div>
   </nav>;
 }
