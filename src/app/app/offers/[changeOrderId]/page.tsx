@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { BellRing, Eye, PencilLine, Plus, TimerReset } from "lucide-react";
+import { DocumentMoreMenu } from "@/components/catalog/document-more-menu";
+import { listCatalog } from "@/modules/catalog/queries";
 import { AttachmentsPanel } from "@/components/change-orders/attachments-panel";
 import { CopyPortalLink } from "@/components/change-orders/copy-portal-link";
 import { RevisionForm } from "@/components/change-orders/revision-form";
@@ -23,6 +25,7 @@ import { can } from "@/lib/authz/permissions";
 import { getCurrentMember, requireProjectCapability } from "@/lib/authz/project-access";
 import { sendChangeOrderAction } from "@/modules/change-orders/actions";
 import { remindClientAction } from "@/modules/change-orders/reminder-actions";
+import { discountLabel } from "@/modules/change-orders/pricing";
 import { listRevisionAttachments } from "@/modules/change-orders/attachment-data";
 import { documentCode, scheduleLabel, totalLabel, vatLabel } from "@/modules/change-orders/labels";
 import { lastPage, pageHref, pageOffset, parsePage } from "@/lib/pagination";
@@ -77,6 +80,7 @@ export default async function ChangeOrderPage({ params, searchParams }: PageProp
   const awaitingClient = change.revisionStatus === "sent" || change.revisionStatus === "viewed";
   const kindLabel = change.documentKind === "offer" ? "Оферта" : "Промяна";
   const canNotes = can(member, "notes.view");
+  const catalog = canEdit && isOffer ? await listCatalog(context.organizationId) : [];
   const showThread = !!change.frozenAt || change.revisions.some((revision) => revision.frozenAt);
   const [thread, unreadMessages] = showThread ? await Promise.all([listThread(change.id), unreadCount(change.id, "staff")]) : [[], 0];
   if (unreadMessages) await markThreadRead(change.id, "staff");
@@ -125,8 +129,8 @@ export default async function ChangeOrderPage({ params, searchParams }: PageProp
                 <ActionSubmit variant="outline" className="h-8 gap-1.5"><BellRing className="size-4" /> Напомни</ActionSubmit>
               </ActionForm>
             ) : null}
-            {change.frozenAt ? <a href={`/api/changes/${change.id}/pdf`} className="inline-flex h-8 items-center rounded-lg border bg-card px-2.5 text-sm font-medium">Свали PDF</a> : null}
             {portalUrl ? <CopyPortalLink url={portalUrl} /> : null}
+            <DocumentMoreMenu changeOrderId={change.id} title={change.title} pdfHref={change.frozenAt ? `/api/changes/${change.id}/pdf` : null} canCopy={isOffer && can(member, "offers.edit")} />
           </div>
         }
       />
@@ -223,13 +227,20 @@ export default async function ChangeOrderPage({ params, searchParams }: PageProp
               cells: [line.description, Number(line.quantity), line.unit, Number(line.lineTotal).toFixed(2)],
             }))}
           /> : null}
+          {Number(change.discountAmount) ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card px-4 py-3 text-sm">
+              <span>Сума по редове <span className="tabular-nums">{(Number(change.subtotal) + Number(change.discountAmount)).toFixed(2)} {change.currency}</span></span>
+              <span className="font-medium text-primary">{discountLabel(change.discountType, change.discountValue)} −{Number(change.discountAmount).toFixed(2)} {change.currency}</span>
+              <span>Основа <span className="font-semibold tabular-nums">{Number(change.subtotal).toFixed(2)} {change.currency}</span></span>
+            </div>
+          ) : null}
           <AttachmentsPanel
             changeOrderId={change.id}
             initial={attachments}
             editable={canEdit && change.revisionStatus === "draft"}
           />
         </TabsContent>
-        {canEdit ? <TabsContent id="edit" className="pt-5"><RevisionForm withdrawsRevision={awaitingClient ? change.revisionNumber : undefined} initial={{ id: change.id, documentKind: change.documentKind, title: change.title, description: change.description, reason: change.reason, changeKind: change.changeKind, subtotal: change.subtotal, taxRate: change.taxRate, scheduleImpactType: change.scheduleImpactType, scheduleImpactDays: change.scheduleImpactDays, agreedDeadline: change.agreedDeadline, clientNote: change.clientNote, internalNote: change.internalNote, lineItems: change.lineItems }} /></TabsContent> : null}
+        {canEdit ? <TabsContent id="edit" className="pt-5"><RevisionForm catalog={catalog} withdrawsRevision={awaitingClient ? change.revisionNumber : undefined} initial={{ id: change.id, documentKind: change.documentKind, title: change.title, description: change.description, reason: change.reason, changeKind: change.changeKind, subtotal: change.subtotal, taxRate: change.taxRate, scheduleImpactType: change.scheduleImpactType, scheduleImpactDays: change.scheduleImpactDays, agreedDeadline: change.agreedDeadline, clientNote: change.clientNote, internalNote: change.internalNote, discountType: change.discountType, discountValue: change.discountValue, lineItems: change.lineItems }} /></TabsContent> : null}
         {showThread ? <TabsContent id="messages" className="pt-5"><MessageThread side="staff" messages={thread} action={sendStaffMessageAction} hidden={{ changeOrderId: change.id }} placeholder="Отговори на клиента…" emptyText="Клиентът още не е задавал въпроси. Когато попита нещо от портала, ще го видиш тук и ще получиш известие." /></TabsContent> : null}
         {canNotes ? <TabsContent id="notes" className="pt-5"><NotesPanel projectId={change.projectId} changeOrderId={change.id} notes={notes} legacy={legacyNotes} currentUserId={context.userId} isOwner={member.role === "owner"} /></TabsContent> : null}
         <TabsContent id="history" className="flex flex-col gap-5 pt-5">

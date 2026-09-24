@@ -2,6 +2,8 @@ import path from "node:path";
 
 import { Document, Font, Image, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 
+import { discountLabel } from "@/modules/change-orders/pricing";
+
 // Full Noto Sans (Latin + Cyrillic + €). The @fontsource woff files are unicode-range subsets,
 // and react-pdf cannot merge subsets into one family, so every missing glyph rendered blank.
 const fontDirectory = path.join(process.cwd(), "src/modules/pdf/fonts");
@@ -63,7 +65,7 @@ function formatDeadline(value: string | null) {
 
 export function ChangePdfDocument({ organization, project, siteAddress, contact, kind, code, revision, lines, decision, photos = [] }: {
   organization: string; project: string; siteAddress: string; contact: string; kind: "offer" | "change"; code: string;
-  revision: { title: string; description: string; reason: string | null; revisionNumber: number; changeKind: string; subtotal: string; taxAmount: string; total: string; currency: string; taxRate: string; agreedDeadline: string | null; contentHash: string | null; frozenAt: Date | null; clientNote: string | null; responseDueAt?: Date | null };
+  revision: { title: string; description: string; reason: string | null; revisionNumber: number; changeKind: string; subtotal: string; taxAmount: string; total: string; currency: string; taxRate: string; agreedDeadline: string | null; contentHash: string | null; frozenAt: Date | null; clientNote: string | null; responseDueAt?: Date | null; discountType?: "percent" | "amount" | null; discountValue?: string | null; discountAmount?: string | null };
   lines: Line[]; decision: { decision: string; typedName: string; createdAt: Date; verifiedEmail?: string | null; ip?: string | null; signature?: Buffer | null } | null;
   photos?: PdfPhoto[];
 }) {
@@ -121,6 +123,10 @@ export function ChangePdfDocument({ organization, project, siteAddress, contact,
         </View>
       ))}
       <View style={styles.summary} wrap={false}>
+        {Number(revision.discountAmount ?? 0) ? <>
+          <View style={styles.summaryRow}><Text style={{ color: muted }}>Сума по редове</Text><Text>{amount(String(Number(revision.subtotal) + Number(revision.discountAmount)))}</Text></View>
+          <View style={styles.summaryRow}><Text style={{ color: muted }}>{discountLabel(revision.discountType ?? null, revision.discountValue ?? null)}</Text><Text>−{money.format(Number(revision.discountAmount))}</Text></View>
+        </> : null}
         {Number(revision.taxRate) ? <>
           <View style={styles.summaryRow}><Text style={{ color: muted }}>Без ДДС</Text><Text>{amount(revision.subtotal)}</Text></View>
           <View style={styles.summaryRow}><Text style={{ color: muted }}>ДДС {Number(revision.taxRate)}%</Text><Text>{amount(revision.taxAmount)}</Text></View>

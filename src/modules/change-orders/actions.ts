@@ -27,6 +27,7 @@ import { escapeHtml, sendEmail } from "@/lib/email/send";
 import { getActivePortalLink } from "@/modules/change-portal/links";
 import { getProjectState } from "@/modules/projects/state";
 import { summarizeRevisionDiff, type RevisionDiff } from "@/modules/change-orders/revision-diff";
+import { money, priceOffer, type Discount } from "@/modules/change-orders/pricing";
 
 /** `createdId` comes back instead of a redirect when the form still has files to upload. */
 export type QuickChangeState = { error?: string; createdId?: string };
@@ -59,6 +60,8 @@ const offerSchema = z.object({
   title: z.string().trim().min(3, "Добави кратко заглавие.").max(180),
   description: z.string().trim().min(5, "Опиши работата.").max(5000),
   taxRate: z.coerce.number().min(0).max(100),
+  discountType: z.union([z.literal(""), z.enum(["percent", "amount"])]).optional(),
+  discountValue: z.union([z.literal(""), z.coerce.number().min(0).max(999999999)]).optional(),
   scheduleImpactType: z.literal("none").default("none"),
   agreedDeadline: z.iso.date(),
   lines: z
@@ -74,8 +77,12 @@ const offerSchema = z.object({
     .pipe(z.array(offerLineSchema).min(1, "Добави поне един ред.").max(40)),
 });
 
-function money(value: number) {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
+function parseDiscount(data: { discountType?: "" | "percent" | "amount"; discountValue?: "" | number }): Discount {
+  return data.discountType && typeof data.discountValue === "number" && data.discountValue > 0 ? { type: data.discountType, value: data.discountValue } : null;
+}
+
+function discountColumns(discount: Discount, amount: number) {
+  return { discountType: discount?.type ?? null, discountValue: discount ? discount.value.toFixed(2) : null, discountAmount: amount.toFixed(2) };
 }
 
 function deadlineDelta(current: string | null, next: string | null | undefined) {
@@ -274,9 +281,8 @@ export async function createOfferAction(
     ...line,
     lineTotal: money(line.quantity * line.unitPrice),
   }));
-  const subtotal = money(priced.reduce((sum, line) => sum + line.lineTotal, 0));
-  const taxAmount = money(subtotal * (data.taxRate / 100));
-  const total = money(subtotal + taxAmount);
+  const discount = parseDiscount(data);
+  const { subtotal, taxAmount, total, discountAmount } = priceOffer(data.lines, data.taxRate, discount);
 
   const offerId = await database.transaction(async (transaction) => {
     await transaction.execute(
@@ -320,6 +326,7 @@ export async function createOfferAction(
         taxRate: data.taxRate.toFixed(2),
         taxAmount: taxAmount.toFixed(2),
         total: total.toFixed(2),
+        ...discountColumns(discount, discountAmount),
         scheduleImpactType: data.scheduleImpactType,
         scheduleImpactDays: null,
         agreedDeadline: data.agreedDeadline,
@@ -377,6 +384,8 @@ const revisionSchema = z.object({
   agreedDeadline: z.union([z.literal(""), z.iso.date()]),
   clientNote: z.string().trim().max(2000).optional(),
   internalNote: z.string().trim().max(2000).optional(),
+  discountType: z.union([z.literal(""), z.enum(["percent", "amount"])]).optional(),
+  discountValue: z.union([z.literal(""), z.coerce.number().min(0).max(999999999)]).optional(),
   lines: z.string().transform((value, context) => {
     try { return JSON.parse(value) as unknown; }
     catch { context.addIssue({ code: "custom", message: "Редовете не са валидни." }); return z.NEVER; }
@@ -402,7 +411,10 @@ export async function createDocumentRevisionAction(_state: QuickChangeState, for
     catch (error) { return { error: error instanceof Error ? error.message : "Невалиден срок." }; }
   }
   const priced = data.lines.map((line) => ({ ...line, lineTotal: money(line.quantity * line.unitPrice) }));
-  const subtotal = document.documentKind === "offer" ? money(priced.reduce((sum, line) => sum + line.lineTotal, 0)) : data.changeKind === "no_cost" || data.changeKind === "schedule_only" ? 0 : money(data.subtotal);
+  // Discounts apply to offers only; a change has one price of its own.
+  const discount = document.documentKind === "offer" ? parseDiscount(data) : null;
+  const offerPrice = priceOffer(data.lines, data.taxRate, discount);
+  const subtotal = document.documentKind === "offer" ? offerPrice.subtotal : data.changeKind === "no_cost" || data.changeKind === "schedule_only" ? 0 : money(data.subtotal);
   const taxAmount = money(subtotal * data.taxRate / 100);
   const total = document.documentKind === "change" && data.changeKind === "credit" ? -money(subtotal + taxAmount) : money(subtotal + taxAmount);
   await db.transaction(async (tx) => {
@@ -419,7 +431,7 @@ export async function createDocumentRevisionAction(_state: QuickChangeState, for
       changeOrderId: data.changeOrderId, revisionNumber: current.revisionNumber + 1,
       title: data.title, description: data.description, reason: data.reason || null,
       changeKind: document.documentKind === "offer" ? "addition" : data.changeKind,
-      currency: current.currency, subtotal: subtotal.toFixed(2), taxRate: data.taxRate.toFixed(2),
+      currency: current.currency, subtotal: subtotal.toFixed(2), taxRate: data.taxRate.toFixed(2), ...discountColumns(discount, offerPrice.discountAmount),
       taxAmount: taxAmount.toFixed(2), total: total.toFixed(2),
       scheduleImpactType: document.documentKind === "offer" ? "none" : data.scheduleImpactType,
       scheduleImpactDays: scheduleDays,
@@ -543,6 +555,7 @@ export async function sendChangeOrderAction(formData: FormData) {
         lineItems,
         ...(attachments.length ? { attachments } : {}),
         responseDueAt: responseDueAt.toISOString(),
+        ...(revision.discountType ? { discountType: revision.discountType, discountValue: revision.discountValue, discountAmount: revision.discountAmount } : {}),
       });
       if (revision.status === "draft") {
         await transaction

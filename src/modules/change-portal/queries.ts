@@ -52,6 +52,9 @@ const portalDocumentColumns = {
   agreedDeadline: changeOrderRevisions.agreedDeadline,
   clientNote: changeOrderRevisions.clientNote,
   responseDueAt: changeOrderRevisions.responseDueAt,
+  discountType: changeOrderRevisions.discountType,
+  discountValue: changeOrderRevisions.discountValue,
+  discountAmount: changeOrderRevisions.discountAmount,
   frozenAt: changeOrderRevisions.frozenAt,
   contentHash: changeOrderRevisions.contentHash,
   createdAt: changeOrderRevisions.createdAt,
@@ -149,6 +152,7 @@ export async function getPortalChange(
         total: changeOrderRevisions.total,
         taxRate: changeOrderRevisions.taxRate,
         agreedDeadline: changeOrderRevisions.agreedDeadline,
+        discountAmount: changeOrderRevisions.discountAmount,
         currency: changeOrderRevisions.currency,
         frozenAt: changeOrderRevisions.frozenAt,
       })

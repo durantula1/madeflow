@@ -1126,6 +1126,10 @@ export const changeOrderRevisions = appSchema.table(
     viewedAt: timestamp("viewed_at", { withTimezone: true }),
     clientRemindedAt: timestamp("client_reminded_at", { withTimezone: true }),
     expiryWarnedAt: timestamp("expiry_warned_at", { withTimezone: true }),
+    /** Offer-level discount; `subtotal` is the taxable base after it. */
+    discountType: text("discount_type", { enum: ["percent", "amount"] }),
+    discountValue: numeric("discount_value", { precision: 14, scale: 2 }),
+    discountAmount: numeric("discount_amount", { precision: 14, scale: 2 }).notNull().default("0"),
     clientNote: text("client_note"),
     internalNote: text("internal_note"),
     frozenAt: timestamp("frozen_at", { withTimezone: true }),
@@ -1510,4 +1514,40 @@ export const notificationPreferences = appSchema.table(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [primaryKey({ columns: [table.userId, table.organizationId, table.eventType] })],
+);
+
+export const catalogItems = appSchema.table(
+  "catalog_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    unit: text("unit"),
+    unitPrice: numeric("unit_price", { precision: 14, scale: 2 }).notNull(),
+    category: text("category"),
+    createdBy: uuid("created_by").notNull(),
+    ...timestamps,
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+  },
+  (table) => [index("catalog_items_org_name_idx").on(table.organizationId, sql`lower(${table.name})`)],
+);
+
+export type TemplateLine = { description: string; quantity: number; unit: string; unitPrice: number };
+
+export const offerTemplates = appSchema.table(
+  "offer_templates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    title: text("title").notNull(),
+    description: text("description").notNull(),
+    clientNote: text("client_note"),
+    taxRate: numeric("tax_rate", { precision: 5, scale: 2 }).notNull(),
+    lines: jsonb("lines").$type<TemplateLine[]>().notNull().default([]),
+    createdBy: uuid("created_by").notNull(),
+    ...timestamps,
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+  },
+  (table) => [index("offer_templates_org_idx").on(table.organizationId, table.createdAt.desc())],
 );

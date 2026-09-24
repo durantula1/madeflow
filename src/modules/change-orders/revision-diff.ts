@@ -1,5 +1,5 @@
 type DiffLine = { description: string; quantity: string | number; unit: string | null; unitPrice: string | number; lineTotal: string | number };
-type DiffRevision = { revisionNumber: number; total: string | number; taxRate: string | number; agreedDeadline: string | null; currency: string; lineItems: DiffLine[] };
+type DiffRevision = { revisionNumber: number; total: string | number; taxRate: string | number; agreedDeadline: string | null; currency: string; discountAmount?: string | number | null; lineItems: DiffLine[] };
 
 export type RevisionDiff = {
   previousNumber: number;
@@ -25,6 +25,7 @@ export function summarizeRevisionDiff(previous: DiffRevision, next: DiffRevision
     }
   }
   for (const [id, line] of before) if (!after.has(id)) changes.push(`Премахнато: ${line.description}`);
+  if (Number(previous.discountAmount ?? 0) !== Number(next.discountAmount ?? 0)) changes.push(Number(next.discountAmount ?? 0) ? `Отстъпка: ${amount(previous.discountAmount ?? 0)} → ${amount(next.discountAmount ?? 0)} ${next.currency}` : "Отстъпката е премахната");
   if (Number(previous.taxRate) !== Number(next.taxRate)) changes.push(`ДДС: ${Number(previous.taxRate)}% → ${Number(next.taxRate)}%`);
   if (previous.agreedDeadline !== next.agreedDeadline) changes.push(`Срок: ${previous.agreedDeadline ?? "—"} → ${next.agreedDeadline ?? "—"}`);
   return { previousNumber: previous.revisionNumber, totalBefore: Number(previous.total), totalAfter: Number(next.total), currency: next.currency, changes };

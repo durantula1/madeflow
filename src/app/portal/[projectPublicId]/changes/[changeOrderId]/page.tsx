@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AttachmentsPanel } from "@/components/change-orders/attachments-panel";
 import { listRevisionAttachments } from "@/modules/change-orders/attachment-data";
 import { documentCode, scheduleLabel, totalLabel, vatLabel } from "@/modules/change-orders/labels";
+import { discountLabel } from "@/modules/change-orders/pricing";
 import { getPortalChange } from "@/modules/change-portal/queries";
 import { markRevisionViewed } from "@/modules/change-portal/viewed";
 import { MessageThread } from "@/components/messages/message-thread";
@@ -116,6 +117,16 @@ export default async function PortalChangePage({
                   ))}
                 </tbody>
                 <tfoot className="border-t bg-muted/30 text-muted-foreground">
+                  {Number(change.discountAmount) ? <>
+                    <tr>
+                      <td colSpan={3} className="px-3 pt-2.5 text-right">Сума по редове</td>
+                      <td className="px-3 pt-2.5 text-right tabular-nums text-foreground">{money(Number(change.subtotal) + Number(change.discountAmount))}</td>
+                    </tr>
+                    <tr>
+                      <td colSpan={3} className="px-3 pt-1 text-right text-primary">{discountLabel(change.discountType, change.discountValue)}</td>
+                      <td className="px-3 pt-1 text-right font-medium tabular-nums text-primary">−{money(change.discountAmount)}</td>
+                    </tr>
+                  </> : null}
                   <tr>
                     <td colSpan={3} className="px-3 pt-2.5 text-right">Основа</td>
                     <td className="px-3 pt-2.5 text-right tabular-nums text-foreground">{money(change.subtotal)}</td>
@@ -227,7 +238,7 @@ export default async function PortalChangePage({
         {money(change.total)} <span className="text-xl text-white/70">{change.currency}</span>
       </p>
       <p className="mt-1 text-xs text-white/50">
-        Основа {money(change.subtotal)} · {vatLabel(change.taxRate)}
+        {Number(change.discountAmount) ? `${discountLabel(change.discountType, change.discountValue)} −${money(change.discountAmount)} · ` : ""}Основа {money(change.subtotal)} · {vatLabel(change.taxRate)}
       </p>
       <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-sidebar-border pt-4 text-sm">
         <CalendarClock className="size-4 shrink-0 text-primary" />

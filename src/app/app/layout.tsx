@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
+  BookOpen,
   Compass,
   Bell,
   Building2,
@@ -69,6 +70,7 @@ export default async function WorkspaceLayout({
             label="Оферти"
             icon={<FileText className="size-4" />}
           />
+          <NavLink href="/app/catalog" label="Каталог" icon={<BookOpen className="size-4" />} />
           <NavLink
             href="/app/notifications"
             label="Известия"

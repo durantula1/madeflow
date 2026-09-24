@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { BookmarkPlus, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -9,6 +9,10 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { StagedAttachments, useUploadStagedFiles } from "@/components/change-orders/staged-attachments";
 import { Stepper } from "@/components/change-orders/stepper";
 import { VatRateField } from "@/components/change-orders/vat-rate-field";
+import { DiscountField } from "@/components/change-orders/discount-field";
+import { discountLabel, priceOffer, type DiscountType } from "@/modules/change-orders/pricing";
+import { CatalogPicker, type CatalogPick } from "@/components/catalog/catalog-picker";
+import { saveCatalogItemAction } from "@/modules/catalog/actions";
 import { vatLabel } from "@/modules/change-orders/labels";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -51,12 +55,27 @@ function formatMoney(value: number) {
   }).format(value);
 }
 
+export type OfferFormInitial = {
+  /** Where the prefill came from, shown above the form (a template name or the duplicated offer). */
+  source: string;
+  title: string;
+  description: string;
+  taxRate: string;
+  lines: Array<{ description: string; quantity: number; unit: string; unitPrice: number }>;
+};
+
 export function OfferForm({
   defaultProject,
   defaultTaxRate,
+  catalog = [],
+  canSaveCatalog = false,
+  initial,
 }: {
   defaultProject?: ProjectOption | null;
   defaultTaxRate: string;
+  catalog?: CatalogPick[];
+  canSaveCatalog?: boolean;
+  initial?: OfferFormInitial | null;
 }) {
   const [state, action, pending] = useActionState<QuickChangeState, FormData>(
     createOfferAction,
@@ -67,16 +86,30 @@ export function OfferForm({
     defaultProject ?? null,
   );
   const projectId = project?.id ?? "";
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [lines, setLines] = useState<Line[]>(() => [blankLine("line-1")]);
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [lines, setLines] = useState<Line[]>(() => initial?.lines.length
+    ? initial.lines.map((line, index) => ({ key: `line-${index + 1}`, description: line.description, quantity: String(line.quantity), unit: line.unit, unitPrice: String(line.unitPrice) }))
+    : [blankLine("line-1")]);
   const [deadline, setDeadline] = useState("");
   const [localError, setLocalError] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const uploadProgress = useUploadStagedFiles(state.createdId, files, "offer-created");
 
-  const [taxRateValue, setTaxRateValue] = useState(String(Number(defaultTaxRate)));
+  const [taxRateValue, setTaxRateValue] = useState(String(Number(initial?.taxRate ?? defaultTaxRate)));
+
+  /** A catalog pick fills the first empty line, otherwise it is appended. */
+  function addFromCatalog(item: CatalogPick) {
+    const line = { description: item.name, quantity: "1", unit: item.unit ?? "", unitPrice: String(Number(item.unitPrice)) };
+    setLines((current) => {
+      const empty = current.findIndex((row) => !row.description.trim() && !Number(row.unitPrice));
+      if (empty === -1) return [...current, { ...blankLine(), ...line }];
+      return current.map((row, index) => index === empty ? { ...row, ...line, key: crypto.randomUUID() } : row);
+    });
+  }
   const taxRate = Number(taxRateValue);
+  const [discountType, setDiscountType] = useState<"" | DiscountType>("");
+  const [discountValue, setDiscountValue] = useState("");
   const projectName = project?.name ?? "";
 
   const priced = useMemo(
@@ -95,10 +128,9 @@ export function OfferForm({
   );
 
   const totals = useMemo(() => {
-    const subtotal = money(priced.reduce((sum, line) => sum + line.lineTotal, 0));
-    const tax = money(subtotal * (taxRate / 100));
-    return { subtotal, tax, total: money(subtotal + tax) };
-  }, [priced, taxRate]);
+    const price = priceOffer(priced, taxRate, discountType ? { type: discountType, value: Number(discountValue) } : null);
+    return { gross: price.gross, discount: price.discountAmount, subtotal: price.subtotal, tax: price.taxAmount, total: price.total };
+  }, [priced, taxRate, discountType, discountValue]);
 
   const payload = priced
     .filter((line) => line.description.trim())
@@ -138,6 +170,7 @@ export function OfferForm({
 
   return (
     <div>
+      {initial ? <p className="mb-4 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm">Попълнено от <span className="font-semibold">{initial.source}</span>. Провери обекта, цените и срока, преди да продължиш.</p> : null}
       <ol className="mb-4 flex items-center gap-2 text-sm">
         <li className={step === "edit" ? "font-semibold" : "text-muted-foreground"}>
           1. Оферта
@@ -196,6 +229,8 @@ export function OfferForm({
           <section className="rounded-2xl border bg-card">
             <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
               <p className="text-sm font-semibold">Редове</p>
+              <div className="flex gap-2">
+              <CatalogPicker items={catalog} onPick={addFromCatalog} />
               <Button
                 type="button"
                 className="inline-flex h-9 items-center gap-1.5 rounded-lg border bg-background px-3 text-sm font-medium hover:bg-muted"
@@ -203,8 +238,9 @@ export function OfferForm({
               >
                 <Plus className="size-4" /> Ред
               </Button>
+              </div>
             </div>
-            <div className="hidden grid-cols-[minmax(0,1fr)_6.5rem_4.5rem_9.5rem_5.5rem_2.25rem] gap-2 px-4 py-2 text-xs text-muted-foreground xl:grid">
+            <div className="hidden grid-cols-[minmax(0,1fr)_6.5rem_4.5rem_9.5rem_5.5rem_4.75rem] gap-2 px-4 py-2 text-xs text-muted-foreground xl:grid">
               <span>Описание</span>
               <span>К-во</span>
               <span>Мярка</span>
@@ -218,7 +254,7 @@ export function OfferForm({
                 return (
                   <div
                     key={line.key}
-                    className="px-4 py-3 xl:grid xl:grid-cols-[minmax(0,1fr)_6.5rem_4.5rem_9.5rem_5.5rem_2.25rem] xl:items-center xl:gap-2"
+                    className="px-4 py-3 xl:grid xl:grid-cols-[minmax(0,1fr)_6.5rem_4.5rem_9.5rem_5.5rem_4.75rem] xl:items-center xl:gap-2"
                   >
                     <div className="flex gap-2 xl:contents">
                       <Input
@@ -287,30 +323,37 @@ export function OfferForm({
                         </span>
                       </label>
                     </div>
-                    <p className="mt-1 text-right text-sm font-medium tabular-nums xl:mt-0">
-                      {formatMoney(row?.lineTotal ?? 0)}
-                    </p>
-                    <Button
-                      type="button"
-                      aria-label="Премахни ред"
-                      isDisabled={lines.length === 1}
-                      className="hidden size-9 place-items-center justify-self-end rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-30 xl:grid"
-                      onPress={() =>
-                        setLines((current) =>
-                          current.filter((item) => item.key !== line.key),
-                        )
-                      }
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
+                    <div className="mt-1 flex items-center justify-between gap-2 xl:mt-0 xl:justify-end">
+                      {canSaveCatalog ? <SaveLineButton line={line} className="xl:hidden" /> : <span />}
+                      <p className="text-right text-sm font-medium tabular-nums">
+                        {formatMoney(row?.lineTotal ?? 0)}
+                      </p>
+                    </div>
+                    <div className="hidden items-center justify-end gap-0.5 xl:flex">
+                      {canSaveCatalog ? <SaveLineButton line={line} iconOnly /> : null}
+                      <Button
+                        type="button"
+                        aria-label="Премахни ред"
+                        isDisabled={lines.length === 1}
+                        className="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-30"
+                        onPress={() =>
+                          setLines((current) =>
+                            current.filter((item) => item.key !== line.key),
+                          )
+                        }
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
                   </div>
                 );
               })}
             </div>
           </section>
 
-          <section className="rounded-2xl border bg-card p-4">
+          <section className="grid gap-4 rounded-2xl border bg-card p-4">
             <VatRateField value={taxRateValue} onChange={setTaxRateValue} />
+            <DiscountField defaultType={discountType} defaultValue={discountValue} onChange={(type, value) => { setDiscountType(type); setDiscountValue(value); }} />
           </section>
 
           <label className="block rounded-2xl border bg-card p-4 text-sm font-medium">Договорен краен срок
@@ -323,6 +366,16 @@ export function OfferForm({
         <aside className="mt-4 rounded-2xl border bg-card p-4 lg:sticky lg:top-20 lg:mt-0">
           <p className="text-sm font-semibold">Сметка</p>
           <dl className="mt-3 space-y-2 text-sm">
+            {totals.discount ? <>
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted-foreground">Сума по редове</dt>
+                <dd className="tabular-nums">{formatMoney(totals.gross)}</dd>
+              </div>
+              <div className="flex justify-between gap-3 text-primary">
+                <dt>{discountLabel(discountType || null, discountValue)}</dt>
+                <dd className="tabular-nums">−{formatMoney(totals.discount)}</dd>
+              </div>
+            </> : null}
             <div className="flex justify-between gap-3">
               <dt className="text-muted-foreground">Без ДДС</dt>
               <dd className="tabular-nums">{formatMoney(totals.subtotal)}</dd>
@@ -350,6 +403,8 @@ export function OfferForm({
         <input type="hidden" name="description" value={description} />
         <input type="hidden" name="lines" value={JSON.stringify(payload)} />
         <input type="hidden" name="taxRate" value={taxRateValue} />
+        <input type="hidden" name="discountType" value={discountType} />
+        <input type="hidden" name="discountValue" value={discountType ? discountValue : ""} />
         <input type="hidden" name="scheduleImpactType" value="none" />
         <input type="hidden" name="agreedDeadline" value={deadline} />
         {files.length ? <input type="hidden" name="hasAttachments" value="1" /> : null}
@@ -388,7 +443,7 @@ export function OfferForm({
             </p>
             <div className="text-sm sm:text-right">
               <p className="text-muted-foreground">
-                {taxRate ? `Без ДДС ${formatMoney(totals.subtotal)} · ${vatLabel(taxRate)}` : "Не се начислява ДДС"}
+                {totals.discount ? `${discountLabel(discountType || null, discountValue)} −${formatMoney(totals.discount)} · ` : ""}{taxRate ? `Без ДДС ${formatMoney(totals.subtotal)} · ${vatLabel(taxRate)}` : "Не се начислява ДДС"}
               </p>
               <p className="mt-1 text-xl font-semibold tabular-nums">
                 {formatMoney(totals.total)} EUR
@@ -451,5 +506,31 @@ export function OfferForm({
         </>
       )}
     </div>
+  );
+}
+
+/** Saves one line (name, unit, price) to the company catalog for next time. */
+function SaveLineButton({ line, iconOnly = false, className }: { line: Line; iconOnly?: boolean; className?: string }) {
+  const [saving, setSaving] = useState(false);
+  async function save() {
+    if (line.description.trim().length < 2) return toast.error("Първо опиши реда.");
+    setSaving(true);
+    const formData = new FormData();
+    formData.set("name", line.description.trim());
+    formData.set("unit", line.unit.trim());
+    formData.set("unitPrice", line.unitPrice || "0");
+    const result = await saveCatalogItemAction({}, formData);
+    setSaving(false);
+    if (result.error) toast.error(result.error);
+    else toast.success(`„${line.description.trim()}“ е в каталога`);
+  }
+  return iconOnly ? (
+    <Button type="button" aria-label="Запази в каталога" isDisabled={saving} className="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted" onPress={save}>
+      <BookmarkPlus className="size-4" />
+    </Button>
+  ) : (
+    <Button type="button" variant="ghost" isDisabled={saving} className={`h-9 gap-1.5 px-2 text-xs text-muted-foreground ${className ?? ""}`} onPress={save}>
+      <BookmarkPlus className="size-4" /> В каталога
+    </Button>
   );
 }

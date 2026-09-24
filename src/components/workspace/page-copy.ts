@@ -1,4 +1,9 @@
 export const workspacePageCopy = {
+  catalog: {
+    eyebrow: "Бързи оферти",
+    title: "Каталог и шаблони",
+    description: "Услуги и материали с цени и готови оферти, от които започваш за секунди.",
+  },
   guide: {
     eyebrow: "Ръководство",
     title: "Как работи MadeFlow",
