@@ -21,15 +21,15 @@ export function DocumentPageSkeleton() {
       <DetailHeaderSkeleton inBreadcrumb />
       <div className={documentLayoutClassName}>
         <div className={documentAreas.status}>
-          <Card>
+          <Card size="sm">
             <CardHeader className="lg:sr-only"><CardTitle>Статус</CardTitle></CardHeader>
             <CardContent className="flex flex-col gap-4 lg:flex-row lg:items-center lg:gap-6">
               <div className="flex flex-1 flex-col gap-4 lg:flex-row">
                 {[0, 1, 2, 3].map((index) => (
-                  <div key={index} className="flex gap-3 lg:flex-1 lg:flex-col lg:gap-2"><Skeleton className="mt-1 size-3.5 rounded-full" /><div className="flex flex-col gap-1"><Line className="w-32" /><Skeleton className="h-3 w-24" /></div></div>
+                  <div key={index} className="flex gap-3 lg:flex-1 lg:flex-col lg:gap-1.5"><Skeleton className="mt-1 size-3.5 rounded-full" /><div className="flex flex-col gap-1"><Line className="w-32" /><Skeleton className="h-3 w-24" /></div></div>
                 ))}
               </div>
-              <div className="border-t pt-4 lg:w-64 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6"><Skeleton className="h-10 w-full rounded-lg" /></div>
+              <div className="flex flex-col gap-2 border-t pt-4 lg:flex-row lg:border-t-0 lg:pt-0"><Skeleton className="h-10 w-full rounded-lg lg:h-9 lg:w-44" /><Skeleton className="h-9 w-full rounded-lg lg:w-28" /><Skeleton className="h-9 w-full rounded-lg lg:w-9" /></div>
             </CardContent>
           </Card>
         </div>

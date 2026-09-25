@@ -33,6 +33,13 @@ const dateTime = (value: Date) =>
     dateStyle: "medium",
     timeStyle: "short",
   }).format(value);
+/** `23.09, 16:09`; the year only when it is not the current one. Keeps the status band on one line. */
+const shortDateTime = (value: Date) => {
+  const sameYear = value.getFullYear() === new Date().getFullYear();
+  const day = new Intl.DateTimeFormat("bg-BG", { day: "2-digit", month: "2-digit", ...(sameYear ? {} : { year: "numeric" }) }).format(value).replace(/\s?г\.$/, "");
+  const time = new Intl.DateTimeFormat("bg-BG", { hour: "2-digit", minute: "2-digit" }).format(value);
+  return `${day}, ${time}`;
+};
 const money = (value: string | number) => Number(value).toFixed(2);
 
 const decisionLabels: Record<string, string> = {
@@ -42,9 +49,9 @@ const decisionLabels: Record<string, string> = {
 };
 
 const primaryClassName =
-  "inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/90";
+  "inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-medium whitespace-nowrap text-primary-foreground transition hover:bg-primary/90 lg:h-9 lg:w-auto";
 const secondaryClassName =
-  "inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium transition hover:bg-muted";
+  "inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border bg-card px-3 text-sm font-medium whitespace-nowrap transition hover:bg-muted lg:w-auto";
 
 type StepState = "done" | "current" | "pending" | "alert";
 
@@ -61,7 +68,7 @@ function Step({
 }) {
   return (
     // Vertical on phones; on wide screens the steps run left to right with a horizontal connector.
-    <li className="relative flex gap-3 pb-4 last:pb-0 lg:flex-1 lg:flex-col lg:gap-2 lg:pr-4 lg:pb-0">
+    <li className="relative flex gap-3 pb-4 last:pb-0 lg:flex-1 lg:flex-col lg:gap-1.5 lg:pr-4 lg:pb-0">
       {last ? null : (
         <span
           aria-hidden="true"
@@ -146,7 +153,7 @@ export function DocumentStatusCard({
         success="Документът е изпратен"
       >
         <input type="hidden" name="changeOrderId" value={change.id} />
-        <ActionSubmit className="h-10 w-full gap-2">
+        <ActionSubmit className="h-10 w-full gap-2 whitespace-nowrap lg:h-9 lg:w-auto">
           <Send className="size-4" /> Изпрати на клиента
         </ActionSubmit>
       </ActionForm>
@@ -155,7 +162,7 @@ export function DocumentStatusCard({
     primary = (
       <ActionForm action={remindClientAction} success="Напомнянето е изпратено">
         <input type="hidden" name="changeOrderId" value={change.id} />
-        <ActionSubmit className="h-10 w-full gap-2">
+        <ActionSubmit className="h-10 w-full gap-2 whitespace-nowrap lg:h-9 lg:w-auto">
           <BellRing className="size-4" /> Напомни на клиента
         </ActionSubmit>
       </ActionForm>
@@ -186,7 +193,7 @@ export function DocumentStatusCard({
   const showEdit = canEdit && !needsRework && status !== "draft";
 
   return (
-    <Card>
+    <Card size="sm">
       <CardHeader className="lg:sr-only">
         <CardTitle>Статус</CardTitle>
       </CardHeader>
@@ -213,19 +220,19 @@ export function DocumentStatusCard({
             <ol className="lg:flex">
               <Step
                 label="Чернова"
-                detail={dateTime(change.createdAt)}
+                detail={shortDateTime(change.createdAt)}
                 state={status === "draft" ? "current" : "done"}
               />
               <Step
                 label="Изпратена на клиента"
-                detail={change.frozenAt ? dateTime(change.frozenAt) : undefined}
+                detail={change.frozenAt ? shortDateTime(change.frozenAt) : undefined}
                 state={change.frozenAt ? "done" : "pending"}
               />
               <Step
                 label="Отворена от клиента"
                 detail={
                   change.viewedAt
-                    ? dateTime(change.viewedAt)
+                    ? shortDateTime(change.viewedAt)
                     : awaiting
                       ? "Още не я е отворил"
                       : undefined
@@ -249,9 +256,9 @@ export function DocumentStatusCard({
                 }
                 detail={
                   decision
-                    ? `${decision.typedName} · ${dateTime(decision.createdAt)}`
+                    ? `${decision.typedName} · ${shortDateTime(decision.createdAt)}`
                     : change.responseDueAt && (awaiting || status === "expired")
-                      ? `${status === "expired" ? "Изтече на" : "Валидна до"} ${dateTime(change.responseDueAt)}`
+                      ? `${status === "expired" ? "Изтече на" : "Валидна до"} ${shortDateTime(change.responseDueAt)}`
                       : undefined
                 }
                 state={decisionState}
@@ -265,7 +272,7 @@ export function DocumentStatusCard({
             ) : null}
           </div>
           {primary || showEdit || portalUrl ? (
-            <div className="flex flex-col gap-2 border-t pt-4 lg:w-64 lg:shrink-0 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
+            <div className="flex flex-col gap-2 border-t pt-4 lg:shrink-0 lg:flex-row lg:items-center lg:border-t-0 lg:pt-0">
               {primary}
               {showEdit ? (
                 <Link href={editHref} className={secondaryClassName}>
@@ -276,8 +283,9 @@ export function DocumentStatusCard({
                 <CopyPortalLink
                   url={portalUrl}
                   variant="outline"
-                  className="h-9 w-full"
+                  className="h-9 w-full lg:w-9 lg:px-0"
                   label="Копирай линка за клиента"
+                  labelClassName="lg:sr-only"
                 />
               ) : null}
             </div>
