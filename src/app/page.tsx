@@ -4,6 +4,7 @@ import "./marketing.css";
 
 import { faqQuestions } from "@/components/marketing/faq";
 import { LandingExperience } from "@/components/marketing/landing-experience";
+import { authHintScript } from "@/lib/auth/session-hint";
 import { productDefinition, siteUrl } from "@/lib/seo/site";
 
 export const metadata: Metadata = { alternates: { canonical: "/" } };
@@ -44,6 +45,8 @@ const structuredData = {
 export default function HomePage() {
   return (
     <>
+      {/* Before the header paints: marks <html data-auth> so CSS shows the right buttons (no flash). */}
+      <script dangerouslySetInnerHTML={{ __html: authHintScript }} />
       <script
         type="application/ld+json"
         // Static, trusted content; `<` is escaped so the JSON cannot close the script tag.

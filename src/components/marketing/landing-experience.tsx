@@ -9,7 +9,7 @@ import {
   Lock,
   ShieldCheck,
 } from "lucide-react";
-import { useSyncExternalStore } from "react";
+import { useEffect } from "react";
 import { LazyMotion, m, useScroll, useSpring } from "motion/react";
 
 import { LEGAL_DOCUMENTS } from "@/lib/legal";
@@ -21,25 +21,18 @@ import { ProofStrip } from "./proof-strip";
 import { HeroReveal, Reveal } from "./reveal";
 import { RevisionStack } from "./revision-stack";
 import { SecuritySection } from "./security-section";
+import { applyAuthHint } from "@/lib/auth/session-hint";
 import { productDefinition } from "@/lib/seo/site";
 
-// The landing page is static (cached, back/forward-cacheable), so the signed-in check runs in the
-// browser: the Supabase session cookie is readable there. The server render assumes a visitor.
-const noSubscribe = () => () => {};
+// The landing page is static (cached, back/forward-cacheable). Both signed-in and visitor buttons
+// are in the HTML; `authHintScript` (run before paint by the page) sets <html data-auth>, and CSS
+// shows one set, so a reload never flashes the wrong buttons.
 const loadMotionFeatures = () =>
   import("./motion-features").then((module) => module.default);
-function hasSessionCookie() {
-  return document.cookie
-    .split("; ")
-    .some((cookie) => /^sb-.*-auth-token(\.0)?=./.test(cookie));
-}
 
 export function LandingExperience() {
-  const signedIn = useSyncExternalStore(
-    noSubscribe,
-    hasSessionCookie,
-    () => false,
-  );
+  // Client-side navigation to "/" does not run the page's inline script, so repeat it here.
+  useEffect(applyAuthHint, []);
   const { scrollYProgress } = useScroll();
   const pageProgress = useSpring(scrollYProgress, {
     stiffness: 120,
@@ -85,16 +78,14 @@ export function LandingExperience() {
             <a href="#beta">БЕТА</a>
           </nav>
           <div className="flex items-center gap-2">
-            {signedIn ? (
-              <Link
+            <Link
                 href="/app"
                 prefetch={true}
-                className="flex items-center gap-2 border border-[#102b38]/50 bg-[#ff765f] px-3.5 py-2.5 font-mono text-[0.5625rem] font-bold tracking-[0.09em] text-[#102b38]"
+                className="mf-when-in flex items-center gap-2 border border-[#102b38]/50 bg-[#ff765f] px-3.5 py-2.5 font-mono text-[0.5625rem] font-bold tracking-[0.09em] text-[#102b38]"
               >
                 КЪМ ОБЕКТИТЕ <ArrowUpRight className="size-3.5" />
               </Link>
-            ) : (
-              <>
+              <div className="mf-when-out contents">
                 <Link
                   href="/sign-in"
                   className="hidden px-3 py-2 text-xs font-bold sm:block"
@@ -107,8 +98,7 @@ export function LandingExperience() {
                 >
                   ЗАПОЧНИ <ArrowUpRight className="size-3.5" />
                 </Link>
-              </>
-            )}
+              </div>
           </div>
         </header>
 
@@ -144,13 +134,11 @@ export function LandingExperience() {
                 обещание остава на едно място, със запис, който издържа.
               </p>
               <div className="mt-7 flex flex-wrap gap-3">
-                <Link
-                  href={signedIn ? "/app" : "/sign-up"}
-                  prefetch={signedIn}
-                  className="mf-primary-button"
-                >
-                  {signedIn ? "КЪМ ОБЕКТИТЕ" : "СЪЗДАЙ WORKSPACE"}{" "}
-                  <ArrowRight className="size-4" />
+                <Link href="/app" className="mf-when-in mf-primary-button">
+                  КЪМ ОБЕКТИТЕ <ArrowRight className="size-4" />
+                </Link>
+                <Link href="/sign-up" prefetch={false} className="mf-when-out mf-primary-button">
+                  СЪЗДАЙ WORKSPACE <ArrowRight className="size-4" />
                 </Link>
                 <a
                   href="#workflow"
@@ -215,13 +203,11 @@ export function LandingExperience() {
                   Създай workspace и изпрати първата оферта или промяна още
                   днес. Клиентът одобрява през защитен линк и потвърждава с код.
                 </p>
-                <Link
-                  href={signedIn ? "/app" : "/sign-up"}
-                  prefetch={signedIn}
-                  className="mf-dark-button"
-                >
-                  {signedIn ? "КЪМ ОБЕКТИТЕ" : "ЗАПОЧНИ БЕЗПЛАТНО"}{" "}
-                  <ArrowUpRight className="size-4" />
+                <Link href="/app" className="mf-when-in mf-dark-button">
+                  КЪМ ОБЕКТИТЕ <ArrowUpRight className="size-4" />
+                </Link>
+                <Link href="/sign-up" prefetch={false} className="mf-when-out mf-dark-button">
+                  ЗАПОЧНИ БЕЗПЛАТНО <ArrowUpRight className="size-4" />
                 </Link>
               </div>
             </Reveal>
