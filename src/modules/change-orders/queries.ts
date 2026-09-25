@@ -164,6 +164,7 @@ export async function getChangeOrder(
       siteAddress: projects.siteAddress,
       contactId: projectContacts.id,
       contactName: projectContacts.name,
+      contactEmail: projectContacts.email,
       contactRole: projectContacts.portalRole,
       contactEmailVerifiedAt: projectContacts.emailVerifiedAt,
       revisionId: changeOrderRevisions.id,

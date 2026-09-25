@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BreadcrumbCurrent } from "@/components/workspace/app-breadcrumb";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ProjectTabs } from "@/components/projects/project-tabs";
+import { DetailTabs } from "@/components/workspace/detail-tabs";
 import { NotesPanel } from "@/components/notes/notes-panel";
 import { listNotes } from "@/modules/notes/queries";
 import { ActionForm, ActionSubmit } from "@/components/workspace/action-form";
@@ -17,7 +17,8 @@ import { DetailHeader } from "@/components/workspace/detail-header";
 import { EmptyResult } from "@/components/workspace/page/empty-result";
 import { PageShell } from "@/components/workspace/page/page-shell";
 import { StatCard } from "@/components/workspace/stat-card";
-import { ProjectDashboard, formatDay, methodLabels, paymentLabels, stageLabels, workLabels } from "@/components/projects/project-dashboard";
+import { ProjectDashboard, methodLabels, paymentLabels, stageLabels, workLabels } from "@/components/projects/project-dashboard";
+import { formatDay } from "@/modules/change-orders/labels";
 import { FilterSelect } from "@/components/workspace/filter-select";
 import { ListPagination } from "@/components/workspace/list-filters";
 import { ProjectControls } from "@/components/projects/project-controls";
@@ -117,7 +118,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
         <StatCard tone={overdueMinor > 0n ? "coral" : "sand"} label={projectStatLabels.remaining} value={state.offer ? formatCents(state.remainingMinor, state.currency) : "—"} hint={overdueMinor > 0n ? `Просрочено ${formatCents(overdueMinor, state.currency)}` : state.offer && state.remainingMinor <= 0n ? "Изплатено изцяло" : "Няма просрочени вноски"} />
         <StatCard tone={daysToDeadline !== null && daysToDeadline < 0 && project.status === "active" ? "coral" : "blue"} label={projectStatLabels.deadline} value={state.deadline ? formatDay(state.deadline) : "—"} hint={daysToDeadline === null ? "Очаква одобрение" : daysToDeadline > 0 ? `След ${daysToDeadline} ${daysToDeadline === 1 ? "ден" : "дни"}` : daysToDeadline === 0 ? "Днес" : `Изтекъл преди ${-daysToDeadline} ${daysToDeadline === -1 ? "ден" : "дни"}`} />
       </div>
-      <ProjectTabs key={tab} defaultTab={(tab === "payments" && !showPayments) || (tab === "notes" && !canNotes) ? "overview" : tab}>
+      <DetailTabs key={tab} defaultTab={(tab === "payments" && !showPayments) || (tab === "notes" && !canNotes) ? "overview" : tab}>
         <TabsList>
           <TabsTrigger id="overview">{projectTabLabels.overview}</TabsTrigger>
           <TabsTrigger id="documents">{projectTabLabels.documents}</TabsTrigger>
@@ -201,7 +202,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
           <ProjectControls state={state} canManage={canManage} canRecordPayments={canRecordPayments} disputes={disputes} section="payments" />
         </TabsContent> : null}
         {canNotes ? <TabsContent id="notes" className="pt-5"><NotesPanel projectId={projectId} notes={notes} currentUserId={context.userId} isOwner={member.role === "owner"} /></TabsContent> : null}
-      </ProjectTabs>
+      </DetailTabs>
     </PageShell>
   );
 }

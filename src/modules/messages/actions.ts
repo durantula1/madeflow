@@ -46,7 +46,7 @@ export async function sendClientMessageAction(_: MessageState, formData: FormDat
   if (await tooManyRecent(document.id, session.contactId)) return { error: "Изпрати твърде много съобщения. Опитай отново след малко." };
   await getDatabase().transaction(async (tx) => {
     await tx.insert(documentMessages).values({ organizationId: session.organizationId, projectId: session.projectId, changeOrderId: document.id, revisionId: document.revisionId, authorType: "portal_contact", authorId: session.contactId, body: parsed.data.body });
-    await notifyProjectStaff(tx, { organizationId: session.organizationId, projectId: session.projectId, eventType: "client_message", title: `${session.contactName} пита за „${document.title}“`, body: parsed.data.body, href: `/app/offers/${document.id}?tab=messages#document-tabs` });
+    await notifyProjectStaff(tx, { organizationId: session.organizationId, projectId: session.projectId, eventType: "client_message", title: `${session.contactName} пита за „${document.title}“`, body: parsed.data.body, href: `/app/offers/${document.id}?tab=messages` });
   });
   revalidatePath(`/portal/${parsed.data.projectPublicId}/changes/${document.id}`);
   revalidatePath(`/app/offers/${document.id}`);

@@ -5,12 +5,18 @@ import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
-export function CopyPortalLink({ url }: { url: string }) {
+export function CopyPortalLink({ url, variant = "default", className = "h-8", label = "Копирай защитения линк" }: {
+  url: string;
+  variant?: "default" | "outline";
+  className?: string;
+  label?: string;
+}) {
   const [copied, setCopied] = useState(false);
   return (
     <Button
       type="button"
-      className="h-8"
+      variant={variant}
+      className={className}
       onPress={async () => {
         try {
           await navigator.clipboard.writeText(url);
@@ -23,7 +29,7 @@ export function CopyPortalLink({ url }: { url: string }) {
       }}
     >
       {copied ? <Check /> : <Copy />}{" "}
-      {copied ? "Копирано" : "Копирай защитения линк"}
+      {copied ? "Копирано" : label}
     </Button>
   );
 }

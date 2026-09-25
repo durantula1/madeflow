@@ -10,13 +10,21 @@ export function documentNoun(kind: "offer" | "change") {
   return kind === "offer" ? "Оферта" : "Промяна";
 }
 
+/** `2026-10-31` → `31.10.2026`; anything else is returned unchanged. */
+export function formatDay(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split("-").reverse().join(".") : value;
+}
+
 export function scheduleLabel(
   kind: "offer" | "change",
   type: string,
   days: number | null,
   deadline?: string | null,
 ) {
-  if (deadline) return kind === "offer" ? `До ${deadline}` : `Нов срок: ${deadline}`;
+  if (deadline) {
+    const day = formatDay(deadline);
+    return kind === "offer" ? `До ${day}` : `Нов срок: ${day}`;
+  }
   if (type === "days") {
     return kind === "offer" ? `${days ?? 0} дни` : `+ ${days ?? 0} дни`;
   }

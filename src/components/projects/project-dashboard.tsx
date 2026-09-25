@@ -6,8 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyResult } from "@/components/workspace/page/empty-result";
-import { ProjectTabLink } from "@/components/projects/project-tabs";
+import { DetailTabLink } from "@/components/workspace/detail-tabs";
 import { cn } from "@/lib/utils";
+import { formatDay } from "@/modules/change-orders/labels";
 import { cents, formatCents, type getProjectState } from "@/modules/projects/state";
 
 type ProjectState = NonNullable<Awaited<ReturnType<typeof getProjectState>>>;
@@ -18,10 +19,6 @@ export const workLabels: Record<string, string> = { not_started: "Одобрен
 export const paymentLabels: Record<string, string> = { deposit: "Капаро", progress: "Междинно", final: "Окончателно", other: "Друго" };
 export const methodLabels: Record<string, string> = { cash: "В брой", bank: "Банков превод", card: "Карта", other: "Друго" };
 
-/** `2026-09-25` → `25.09.2026`. */
-export function formatDay(value: string) {
-  return value.split("-").reverse().join(".");
-}
 
 export const overviewCardTitles = { stages: "Етапи", payments: "Плащания", documents: "Документи", client: "Клиент" };
 export const overviewGridClassName = "grid gap-4 lg:grid-cols-2";
@@ -34,7 +31,7 @@ function OverviewCard({ title, tab, children }: { title: string; tab?: string; c
     <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
-        {tab ? <CardAction><ProjectTabLink tab={tab} className={linkClassName}>Всички</ProjectTabLink></CardAction> : null}
+        {tab ? <CardAction><DetailTabLink tab={tab} className={linkClassName}>Всички</DetailTabLink></CardAction> : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-2">{children}</CardContent>
     </Card>

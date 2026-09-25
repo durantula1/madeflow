@@ -10,6 +10,7 @@ import { maskEmail } from "@/lib/email/send";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AttachmentsPanel } from "@/components/change-orders/attachments-panel";
+import { DocumentBody } from "@/components/change-orders/document-body";
 import { listRevisionAttachments } from "@/modules/change-orders/attachment-data";
 import { documentCode, scheduleLabel, totalLabel, vatLabel } from "@/modules/change-orders/labels";
 import { discountLabel } from "@/modules/change-orders/pricing";
@@ -66,86 +67,7 @@ export default async function PortalChangePage({
 
   const details = (
     <>
-      <Card>
-        <CardContent className="space-y-5">
-          <div className="grid gap-5 sm:grid-cols-2">
-            <section className={change.reason ? undefined : "sm:col-span-2"}>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {isOffer ? "Какво включва" : "Какво се променя"}
-              </p>
-              <p className="mt-1.5 leading-7">{change.description}</p>
-            </section>
-            {change.reason && (
-              <section>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Защо е необходимо
-                </p>
-                <p className="mt-1.5 leading-7">{change.reason}</p>
-              </section>
-            )}
-          </div>
-          {data.lineItems.length ? (
-            <section className="overflow-hidden rounded-xl border">
-              <table className="w-full text-sm">
-                <thead className="hidden bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground sm:table-header-group">
-                  <tr>
-                    <th className="px-3 py-2 font-semibold">Позиция</th>
-                    <th className="px-3 py-2 text-right font-semibold">Количество</th>
-                    <th className="px-3 py-2 text-right font-semibold">Ед. цена</th>
-                    <th className="px-3 py-2 text-right font-semibold">Сума</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {data.lineItems.map((line) => (
-                    <tr key={line.id} className="align-top">
-                      <td className="px-3 py-2.5">
-                        <p>{line.description}</p>
-                        <p className="text-xs text-muted-foreground sm:hidden">
-                          {Number(line.quantity)} {line.unit} × {money(line.unitPrice)}
-                        </p>
-                      </td>
-                      <td className="hidden px-3 py-2.5 text-right tabular-nums text-muted-foreground sm:table-cell">
-                        {Number(line.quantity)} {line.unit}
-                      </td>
-                      <td className="hidden px-3 py-2.5 text-right tabular-nums text-muted-foreground sm:table-cell">
-                        {money(line.unitPrice)}
-                      </td>
-                      <td className="px-3 py-2.5 text-right font-medium tabular-nums">
-                        {money(line.lineTotal)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot className="border-t bg-muted/30 text-muted-foreground">
-                  {Number(change.discountAmount) ? <>
-                    <tr>
-                      <td colSpan={3} className="px-3 pt-2.5 text-right">Сума по редове</td>
-                      <td className="px-3 pt-2.5 text-right tabular-nums text-foreground">{money(Number(change.subtotal) + Number(change.discountAmount))}</td>
-                    </tr>
-                    <tr>
-                      <td colSpan={3} className="px-3 pt-1 text-right text-primary">{discountLabel(change.discountType, change.discountValue)}</td>
-                      <td className="px-3 pt-1 text-right font-medium tabular-nums text-primary">−{money(change.discountAmount)}</td>
-                    </tr>
-                  </> : null}
-                  <tr>
-                    <td colSpan={3} className="px-3 pt-2.5 text-right">Основа</td>
-                    <td className="px-3 pt-2.5 text-right tabular-nums text-foreground">{money(change.subtotal)}</td>
-                  </tr>
-                  <tr>
-                    <td colSpan={3} className="px-3 pb-2.5 text-right">{Number(change.taxRate) ? vatLabel(change.taxRate) : "Не се начислява ДДС"}</td>
-                    <td className="px-3 pb-2.5 text-right tabular-nums text-foreground">{money(Number(change.total) - Number(change.subtotal))}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </section>
-          ) : null}
-          {change.clientNote && (
-            <p className="rounded-xl bg-muted p-4 text-sm">
-              {change.clientNote}
-            </p>
-          )}
-        </CardContent>
-      </Card>
+      <DocumentBody document={{ ...change, lineItems: data.lineItems }} />
       {attachments.length ? (
         <AttachmentsPanel changeOrderId={change.id} initial={attachments} editable={false} description="Снимки и документи към тази версия. Отвори ги, за да ги видиш в пълен размер." />
       ) : null}
