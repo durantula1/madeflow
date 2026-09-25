@@ -32,7 +32,7 @@ import { lastPage, pageHref, pageOffset, parsePage } from "@/lib/pagination";
 import { countChangeOrders, getChangeOrder, getChangeOrderTitle, listChangeOrders } from "@/modules/change-orders/queries";
 import { getActivePortalLink } from "@/modules/change-portal/links";
 import { loadSignature } from "@/modules/change-portal/signature";
-import { changesCardTitle, documentLayoutClassName, documentTabLabels } from "./document-skeleton";
+import { changesCardTitle, documentAreas, documentLayoutClassName, documentTabLabels } from "./document-skeleton";
 
 const CHANGES_PAGE_SIZE = 10;
 
@@ -106,10 +106,10 @@ export default async function ChangeOrderPage({ params, searchParams }: PageProp
         action={<DocumentMoreMenu changeOrderId={change.id} title={change.title} pdfHref={change.frozenAt ? `/api/changes/${change.id}/pdf` : null} canCopy={isOffer && can(member, "offers.edit")} />}
       />
       <div className={documentLayoutClassName}>
-        <div className="lg:col-start-2 lg:row-start-1">
+        <div className={documentAreas.status}>
           <DocumentStatusCard change={change} path={path} portalUrl={portalUrl} canSend={can(member, "documents.send")} canEdit={canEdit} canDraftChange={can(member, "changes.draft")} />
         </div>
-        <div className="min-w-0 lg:col-start-1 lg:row-span-2 lg:row-start-1">
+        <div className={documentAreas.main}>
           {editing ? (
             <div className="flex flex-col gap-4">
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-tile-sand px-4 py-3 text-sm text-tile-sand-foreground">
@@ -166,7 +166,7 @@ export default async function ChangeOrderPage({ params, searchParams }: PageProp
             </DetailTabs>
           )}
         </div>
-        <div className="lg:col-start-2 lg:row-start-2 lg:self-start">
+        <div className={documentAreas.facts}>
           <DocumentFacts change={change} signatureSrc={signatureSrc} />
         </div>
       </div>
