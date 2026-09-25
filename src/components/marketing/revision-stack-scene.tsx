@@ -113,7 +113,7 @@ function drawSheet(spec: SheetSpec) {
 
   text(
     ctx,
-    `MF-000042 / v${spec.version}`,
+    `ПР-042 / v${spec.version}`,
     90,
     140,
     `700 30px ${MONO}`,
@@ -161,7 +161,7 @@ function drawSheet(spec: SheetSpec) {
   text(ctx, spec.value, 625, 750, `900 72px ${FONT}`, INK);
 
   [
-    "Към оферта ОФ-0017",
+    "Към оферта ОФ-017",
     "Причина: искане на клиента",
     "Нов краен срок: 14.10",
   ].forEach((line, index) => {
@@ -323,13 +323,12 @@ function Stack({ pointer }: { pointer: RefObject<{ x: number; y: number }> }) {
         >
           <mesh geometry={resources.body}>
             {spec.superseded ? (
-              <meshPhysicalMaterial
+              // Plain translucency: transmission would add a full extra render pass every frame.
+              <meshStandardMaterial
                 color="#dfeeee"
-                roughness={0.25}
-                transmission={0.55}
-                thickness={0.4}
+                roughness={0.3}
                 transparent
-                opacity={0.9}
+                opacity={0.72}
               />
             ) : (
               <meshStandardMaterial color="#18394c" roughness={0.6} />
@@ -388,7 +387,7 @@ export default function RevisionStackScene({
   return (
     <Canvas
       aria-hidden="true"
-      dpr={[1, 1.75]}
+      dpr={[1, 1.5]}
       frameloop={active ? "always" : "never"}
       camera={{ position: [0, 0, 9.2], fov: 36 }}
       gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}

@@ -14,7 +14,7 @@ import {
   UserX,
 } from "lucide-react";
 import {
-  motion,
+  m,
   useReducedMotion,
   useScroll,
   useSpring,
@@ -57,7 +57,7 @@ const pillars = [
 ] as const;
 
 const record = [
-  ["ДОКУМЕНТ", "MF-000042 · версия 2"],
+  ["ДОКУМЕНТ", "ПР-042 · версия 2"],
   ["СУМА", "+384 € с ДДС"],
   ["ИЗПИСАНО ИМЕ", "Иван Петров"],
   ["ЧАС", "23.09.2026 · 14:32"],
@@ -79,7 +79,7 @@ function DecisionCertificate() {
 
   return (
     <div ref={ref} className="mf-cert-stage relative mx-auto w-full max-w-[28.75rem]">
-      <motion.div
+      <m.div
         style={reduceMotion ? undefined : { rotateY, rotateX }}
         className="mf-cert relative rounded-[1.75rem] bg-[#fffaf0] p-6 text-[#102b38] shadow-[0_50px_100px_rgba(0,0,0,.45)] sm:p-8"
       >
@@ -94,7 +94,7 @@ function DecisionCertificate() {
         <dl className="divide-y divide-[#102b38]/8">
           {record.map(([label, value]) => (
             <div key={label} className="flex items-center justify-between gap-4 py-3">
-              <dt className="font-mono text-[0.5rem] tracking-[0.12em] text-[#6c858d]">{label}</dt>
+              <dt className="font-mono text-[0.5rem] tracking-[0.12em] text-[#52707d]">{label}</dt>
               <dd className="text-right text-[0.8125rem] font-bold">{value}</dd>
             </div>
           ))}
@@ -107,7 +107,7 @@ function DecisionCertificate() {
             3f9a8c02e7d1…b54e0a9dc21e
           </p>
         </div>
-        <motion.div
+        <m.div
           style={reduceMotion ? undefined : { scale: sealScale, opacity: sealOpacity }}
           className="absolute -bottom-7 -right-5 grid size-24 rotate-[-14deg] place-items-center rounded-full border-4 border-[#102b38] bg-[#ff765f] text-center font-mono text-[0.5rem] font-black leading-3 tracking-[0.1em] shadow-[0_18px_40px_rgba(0,0,0,.35)]"
         >
@@ -115,8 +115,8 @@ function DecisionCertificate() {
             <KeyRound className="mx-auto mb-1 size-5" />
             ЗАКЛЮЧЕНО
           </span>
-        </motion.div>
-      </motion.div>
+        </m.div>
+      </m.div>
     </div>
   );
 }

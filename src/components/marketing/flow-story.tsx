@@ -10,7 +10,7 @@ import {
   Wrench,
 } from "lucide-react";
 import {
-  motion,
+  m,
   useScroll,
   useSpring,
   useTransform,
@@ -85,7 +85,7 @@ function StoryChapter({
   const y = useTransform(progress, [...chapter.range], [32, 0, 0, -32]);
 
   return (
-    <motion.article
+    <m.article
       style={{ opacity, y }}
       className="mf-story-copy absolute inset-x-0 top-1/2 -translate-y-1/2 max-md:top-0 max-md:translate-y-0"
     >
@@ -94,7 +94,7 @@ function StoryChapter({
       </div>
       <h2>{chapter.title}</h2>
       <p>{chapter.text}</p>
-    </motion.article>
+    </m.article>
   );
 }
 
@@ -123,7 +123,7 @@ function StoryStatus({
   );
 
   return (
-    <motion.div
+    <m.div
       style={{ opacity: active, x }}
       className="flex items-center gap-3 border-b border-[#17364a]/10 py-3 last:border-0"
     >
@@ -135,7 +135,7 @@ function StoryStatus({
         <p className="truncate text-[0.6875rem] text-[#52707d]">{detail}</p>
       </div>
       <CircleCheck className="size-4 text-[#16916d]" />
-    </motion.div>
+    </m.div>
   );
 }
 
@@ -164,7 +164,7 @@ export function FlowStory() {
       className="mf-story relative h-[400vh]"
     >
       <div className="sticky top-0 h-screen overflow-hidden supports-[height:100svh]:h-svh">
-        <motion.div
+        <m.div
           style={{ x: glowX }}
           className="pointer-events-none absolute left-1/2 top-1/2 size-[60vw] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#236d86]/30 blur-[100px]"
         />
@@ -186,15 +186,16 @@ export function FlowStory() {
           </div>
 
           <div className="relative flex min-h-[48vh] items-center justify-center max-md:min-h-0 max-md:flex-1 max-md:items-start lg:min-h-[66vh]">
-            <motion.div
+            <m.div
               style={{ x: passportX, y: passportY, rotate: passportRotate }}
+              aria-hidden="true"
               className="mf-passport relative z-10 w-[min(90%,28.75rem)] overflow-hidden rounded-[1.75rem] border border-white/40 bg-[#f8f2e7] p-3 text-[#102b38] shadow-[0_45px_100px_rgba(0,14,28,.55)]"
             >
               <div className="rounded-[1.3125rem] border border-[#17364a]/10 bg-white/80 p-5 backdrop-blur-xl sm:p-6">
                 <div className="flex items-start justify-between border-b border-[#17364a]/10 pb-5">
                   <div>
-                    <p className="font-mono text-[0.5625rem] font-bold tracking-[0.14em] text-[#ef6c54]">
-                      MF-000042
+                    <p className="font-mono text-[0.5625rem] font-bold tracking-[0.14em] text-[#c24a35]">
+                      ПР-042
                     </p>
                     <h3 className="mt-1 text-xl font-black tracking-[-0.04em] sm:text-2xl">
                       Къща · Бояна
@@ -211,7 +212,7 @@ export function FlowStory() {
                     ["СТОЙНОСТ", "+384 €"],
                   ].map(([label, value]) => (
                     <div key={label} className="rounded-xl bg-[#eef3f0] p-2.5">
-                      <p className="font-mono text-[0.4375rem] tracking-[0.1em] text-[#6c858d]">
+                      <p className="font-mono text-[0.4375rem] tracking-[0.1em] text-[#52707d]">
                         {label}
                       </p>
                       <p className="mt-1 truncate text-[0.6875rem] font-bold">
@@ -249,12 +250,12 @@ export function FlowStory() {
                   detail="Разписка и PDF · пълна следа"
                 />
               </div>
-            </motion.div>
+            </m.div>
           </div>
         </div>
 
         <div className="mf-story-rail absolute z-20 h-px bg-white/20">
-          <motion.span
+          <m.span
             style={{ scaleX: routeScale }}
             className="absolute inset-0 origin-left bg-[#ff7b63] shadow-[0_0_16px_rgba(255,123,99,.45)]"
           />
@@ -274,12 +275,12 @@ export function FlowStory() {
               </b>
             </span>
           ))}
-          <motion.span
+          <m.span
             style={{ left: routeLeft }}
             className="absolute top-1/2 grid size-9 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-4 border-[#12364b] bg-[#ff7b63] shadow-[0_0_30px_rgba(255,123,99,.75)]"
           >
             <ArrowRight className="size-4 text-[#102b38]" />
-          </motion.span>
+          </m.span>
         </div>
 
         <div className="absolute bottom-7 left-[6vw] z-20 flex items-center max-md:hidden gap-3 font-mono text-[0.5rem] tracking-[0.14em] text-[#c6dfdf]">

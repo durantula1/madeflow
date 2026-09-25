@@ -41,6 +41,7 @@ export function DemoFrame({
   return (
     <div
       ref={frameRef}
+      aria-hidden="true"
       className="mf-demo overflow-hidden rounded-[1.375rem] border border-[#102b38]/15 bg-[#fffdf7] shadow-[0_30px_70px_rgba(16,43,56,.14)]"
     >
       <div className="flex items-center justify-between gap-3 border-b border-[#102b38]/10 bg-[#f4efe4]/70 px-4 py-3">
@@ -51,7 +52,7 @@ export function DemoFrame({
             <i className="size-2 rounded-full bg-[#bceba8]" />
           </span>
           <div className="min-w-0">
-            <p className="truncate font-mono demo-text-8 tracking-[0.14em] text-[#6c858d]">
+            <p className="truncate font-mono demo-text-8 tracking-[0.14em] text-[#52707d]">
               {crumb}
             </p>
             <p className="truncate demo-text-13 font-black tracking-[-0.03em]">

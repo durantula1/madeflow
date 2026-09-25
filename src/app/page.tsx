@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
 
 import "./marketing.css";
 
@@ -42,12 +41,7 @@ const structuredData = {
   ],
 };
 
-export default async function HomePage() {
-  const jar = await cookies();
-  const signedIn = jar
-    .getAll()
-    .some((cookie) => cookie.name.includes("-auth-token") && cookie.value.length > 0);
-
+export default function HomePage() {
   return (
     <>
       <script
@@ -55,7 +49,7 @@ export default async function HomePage() {
         // Static, trusted content; `<` is escaped so the JSON cannot close the script tag.
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }}
       />
-      <LandingExperience signedIn={signedIn} />
+      <LandingExperience />
     </>
   );
 }

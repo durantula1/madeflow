@@ -12,6 +12,13 @@ export function ProofStrip() {
           </p>
         </Reveal>
         <Reveal delay={0.08}>
+          {/* Where the name comes from: the answer to the struck-out quote. */}
+          <p className="mb-8 max-w-md border-l-2 border-[#102b38] pl-4 text-sm leading-6">
+            <span className="font-serif text-lg font-semibold italic">Pakto</span>{" "}
+            идва от латинското <i className="font-serif">pactum</i>,
+            договорка между две страни. Римляните са знаели, че договорката
+            само на думи трудно се доказва. Pakto я записва.
+          </p>
           <p className="max-w-md text-base font-semibold leading-7 lg:text-lg">
             Всяка допълнителна работа е описана, оценена и одобрена от клиента
             писмено — преди да започне. Думата срещу дума отпада.

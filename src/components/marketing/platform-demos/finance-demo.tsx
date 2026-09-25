@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { SlidersHorizontal } from "lucide-react";
 
 import { DemoFrame, StatusChip, useDemoLoop } from "./demo-frame";
@@ -9,7 +9,7 @@ const total = 24984;
 const payments = [
   { label: "Капаро", method: "банков превод", date: "02.09", amount: 7380 },
   { label: "Междинно", method: "в брой", date: "16.09", amount: 6000 },
-  { label: "Промяна MF-000042", method: "карта", date: "23.09", amount: 384 },
+  { label: "Промяна ПР-042", method: "карта", date: "23.09", amount: 384 },
 ] as const;
 const format = (value: number) => `${String(value).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} €`;
 
@@ -34,7 +34,7 @@ export function FinanceDemo() {
           <p className="font-mono demo-text-9 text-[#b8ced2]">ОСТАВА {format(total - paid)}</p>
         </div>
         <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/15">
-          <motion.div
+          <m.div
             className="h-full rounded-full bg-[#bceba8]"
             initial={false}
             animate={{ width: `${(paid / total) * 100}%` }}
@@ -45,7 +45,7 @@ export function FinanceDemo() {
       <div className="mt-3 min-h-[9.375rem] space-y-2">
         <AnimatePresence initial={false}>
           {visible.map((payment) => (
-            <motion.div
+            <m.div
               key={payment.label}
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -54,20 +54,20 @@ export function FinanceDemo() {
             >
               <span>
                 <b>{payment.label}</b>
-                <span className="ml-2 font-mono demo-text-9 text-[#6c858d]">{payment.date} · {payment.method}</span>
+                <span className="ml-2 font-mono demo-text-9 text-[#52707d]">{payment.date} · {payment.method}</span>
               </span>
               <span className="font-mono demo-text-11 text-[#16916d]">+{format(payment.amount)}</span>
-            </motion.div>
+            </m.div>
           ))}
         </AnimatePresence>
       </div>
-      <motion.div
+      <m.div
         initial={false}
         animate={{ opacity: step >= 4 ? 1 : 0.15, y: step >= 4 ? 0 : 8 }}
         className="mt-3 rounded-xl border border-[#102b38]/15 px-3.5 py-3"
       >
         <div className="flex items-center justify-between">
-          <p className="font-mono demo-text-8 tracking-[0.12em] text-[#6c858d]">МЕСЕЧНА СПРАВКА</p>
+          <p className="font-mono demo-text-8 tracking-[0.12em] text-[#52707d]">МЕСЕЧНА СПРАВКА</p>
           <p className="demo-text-13 font-black">Септември 2026</p>
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
@@ -77,7 +77,7 @@ export function FinanceDemo() {
             </span>
           ))}
         </div>
-      </motion.div>
+      </m.div>
     </DemoFrame>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { Lock } from "lucide-react";
 
 import { DemoFrame, StatusChip, useDemoLoop } from "./demo-frame";
@@ -20,7 +20,7 @@ function Toggle({ on }: { on: boolean }) {
     <span
       className={`relative h-4 w-7 shrink-0 rounded-full transition-colors duration-500 ${on ? "bg-[#1e765d]" : "bg-[#102b38]/15"}`}
     >
-      <motion.i
+      <m.i
         className="absolute top-0.5 size-3 rounded-full bg-white shadow"
         initial={false}
         animate={{ left: on ? "0.875rem" : "0.125rem" }}
@@ -53,18 +53,18 @@ export function TeamDemo() {
           ))}
         </ul>
         <div className="rounded-xl border border-[#102b38]/15 p-3">
-          <p className="font-mono demo-text-8 tracking-[0.12em] text-[#6c858d]">ТАКА ГО ВИЖДА ГЕОРГИ</p>
+          <p className="font-mono demo-text-8 tracking-[0.12em] text-[#52707d]">ТАКА ГО ВИЖДА ГЕОРГИ</p>
           <div className="mt-2 space-y-1 demo-text-11 font-bold">
             {["Обекти", "Оферти и промени", "Известия"].map((item) => (
               <p key={item} className="rounded-md bg-[#f4efe4] px-2 py-1.5">{item}</p>
             ))}
-            <motion.p
+            <m.p
               initial={false}
               animate={{ opacity: financeOn ? 1 : 0, height: financeOn ? "auto" : 0 }}
               className="overflow-hidden rounded-md bg-[#bceba8] px-2 py-1.5"
             >
               Плащания
-            </motion.p>
+            </m.p>
           </div>
           <div className="relative mt-3 overflow-hidden rounded-lg bg-[#fee8a5]/70 p-2.5 demo-text-10">
             <p className={`transition-all duration-500 ${notesOn ? "" : "blur-[5px]"}`}>

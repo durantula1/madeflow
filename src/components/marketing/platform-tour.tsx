@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import { Check } from "lucide-react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 
 import { FinanceDemo } from "./platform-demos/finance-demo";
 import { HistoryDemo } from "./platform-demos/history-demo";
@@ -153,7 +153,7 @@ export function PlatformTour() {
             aria-label="Модули"
             className="mf-tour-nav sticky top-[4.75rem] z-20 -mx-[6vw] self-start px-[6vw] lg:top-32 lg:mx-0 lg:px-0"
           >
-            <p className="mb-4 hidden font-mono text-[0.5625rem] tracking-[0.14em] text-[#6c858d] lg:block">
+            <p className="mb-4 hidden font-mono text-[0.5625rem] tracking-[0.14em] text-[#52707d] lg:block">
               МОДУЛИ
             </p>
             <ul ref={tabs} className="flex gap-1 overflow-x-auto py-3 lg:flex-col lg:gap-0 lg:overflow-visible lg:border-l lg:border-[#102b38]/15 lg:py-0">
@@ -162,7 +162,7 @@ export function PlatformTour() {
                 return (
                   <li key={module.id} className="relative shrink-0">
                     {isActive && (
-                      <motion.span
+                      <m.span
                         layoutId="mf-tour-indicator"
                         className="absolute inset-0 rounded-full bg-[#102b38] lg:inset-y-0 lg:-left-px lg:right-auto lg:w-[0.1875rem] lg:rounded-none lg:bg-[#ff765f]"
                         transition={{ type: "spring", stiffness: 380, damping: 32 }}

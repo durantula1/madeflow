@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { CalendarClock } from "lucide-react";
 
 import { DemoFrame, StatusChip, useDemoLoop } from "./demo-frame";
@@ -21,7 +21,7 @@ export function OfferDemo() {
   return (
     <DemoFrame
       frameRef={ref}
-      crumb="ОФЕРТИ / ОФ-0017"
+      crumb="ОФЕРТИ / ОФ-017"
       title="Подове и баня · кв. Бояна"
       status={
         <StatusChip tone={step >= 5 ? "ok" : step >= 4 ? "wait" : "muted"}>
@@ -29,14 +29,14 @@ export function OfferDemo() {
         </StatusChip>
       }
     >
-      <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 px-1 pb-2 font-mono demo-text-8 tracking-[0.12em] text-[#6c858d]">
+      <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 px-1 pb-2 font-mono demo-text-8 tracking-[0.12em] text-[#52707d]">
         <span>ОПИСАНИЕ</span>
         <span>К-ВО</span>
         <span className="w-16 text-right">СУМА</span>
       </div>
       <div className="space-y-2">
         {lines.map((line, index) => (
-          <motion.div
+          <m.div
             key={line.label}
             initial={false}
             animate={{ opacity: step > index ? 1 : 0.15, x: step > index ? 0 : 12 }}
@@ -49,7 +49,7 @@ export function OfferDemo() {
             <span className="w-16 text-right font-mono demo-text-11">
               {format(Number(line.qty) * line.price)}
             </span>
-          </motion.div>
+          </m.div>
         ))}
       </div>
       <div className="mt-4 grid grid-cols-[1fr_auto] gap-4 border-t border-[#102b38]/10 pt-4">
@@ -61,7 +61,7 @@ export function OfferDemo() {
           </p>
         </div>
         <div className="text-right">
-          <p className="font-mono demo-text-8 tracking-[0.12em] text-[#6c858d]">ОБЩО</p>
+          <p className="font-mono demo-text-8 tracking-[0.12em] text-[#52707d]">ОБЩО</p>
           <p className="text-2xl font-black tracking-[-0.06em]">{format(subtotal * 1.2)}</p>
           <p className="mt-1 font-mono demo-text-9 text-[#16916d]">
             {step >= 5 ? "Одобрена · 14:02" : " "}

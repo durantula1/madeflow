@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { Component, useEffect, useRef, useState, type ReactNode } from "react";
-import { motion, useReducedMotion } from "motion/react";
+import { m, useReducedMotion } from "motion/react";
 
 const RevisionStackScene = dynamic(() => import("./revision-stack-scene"), {
   ssr: false,
@@ -47,6 +47,26 @@ export function RevisionStack() {
   const [allowed, setAllowed] = useState(false);
   const [ready, setReady] = useState(false);
   const [visible, setVisible] = useState(true);
+  // three.js is ~600 KB of script: start it only once the page has loaded and the main thread
+  // is idle, so it never competes with the headline paint or the first interactions.
+  const [idle, setIdle] = useState(false);
+
+  useEffect(() => {
+    let handle = 0;
+    const start = () => {
+      // Safari has no requestIdleCallback.
+      handle = typeof window.requestIdleCallback === "function"
+        ? window.requestIdleCallback(() => setIdle(true), { timeout: 3000 })
+        : window.setTimeout(() => setIdle(true), 1500) as number;
+    };
+    if (document.readyState === "complete") start();
+    else window.addEventListener("load", start, { once: true });
+    return () => {
+      window.removeEventListener("load", start);
+      if (typeof window.cancelIdleCallback === "function") window.cancelIdleCallback(handle);
+      window.clearTimeout(handle);
+    };
+  }, []);
 
   useEffect(() => {
     const query = window.matchMedia("(width >= 64rem)");
@@ -70,18 +90,18 @@ export function RevisionStack() {
     return () => observer.disconnect();
   }, []);
 
-  const showScene = allowed && !reduceMotion;
+  const showScene = allowed && idle && !reduceMotion;
 
   return (
     <>
       <div
         ref={container}
         aria-hidden="true"
-        className="pointer-events-none absolute right-[-5vw] top-[-4vh] z-10 hidden h-[86vh] w-[58vw] lg:block xl:right-[-6vw] xl:w-[min(56vw,53.75rem)]"
+        className="pointer-events-none absolute right-[-3vw] top-[18vh] z-10 hidden h-[68vh] w-[42vw] lg:block xl:right-[-2vw] xl:w-[min(40vw,38rem)]"
       >
         {showScene && (
           <SceneBoundary onError={() => setAllowed(false)}>
-            <motion.div
+            <m.div
               className="size-full"
               initial={{ opacity: 0 }}
               animate={{ opacity: ready ? 1 : 0 }}
@@ -91,7 +111,7 @@ export function RevisionStack() {
                 active={visible}
                 onReady={() => setReady(true)}
               />
-            </motion.div>
+            </m.div>
           </SceneBoundary>
         )}
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { FileLock2, Fingerprint } from "lucide-react";
 
 import { DemoFrame, StatusChip, useDemoLoop } from "./demo-frame";
@@ -19,7 +19,7 @@ export function HistoryDemo() {
   return (
     <DemoFrame
       frameRef={ref}
-      crumb="ИСТОРИЯ / MF-000042"
+      crumb="ИСТОРИЯ / ПР-042"
       title="Дневник на промяната"
       status={
         <StatusChip tone={step >= events.length ? "ok" : "wait"}>
@@ -29,7 +29,7 @@ export function HistoryDemo() {
     >
       <ol className="relative ml-2 border-l border-[#102b38]/15 pl-5">
         {events.map((event, index) => (
-          <motion.li
+          <m.li
             key={event.time}
             initial={false}
             animate={{ opacity: step > index ? 1 : 0.12, y: step > index ? 0 : -6 }}
@@ -40,26 +40,26 @@ export function HistoryDemo() {
                 index === events.length - 1 ? "bg-[#16916d]" : "bg-[#ff765f]"
               }`}
             />
-            <p className="font-mono demo-text-9 text-[#6c858d]">
+            <p className="font-mono demo-text-9 text-[#52707d]">
               {event.time} · {event.who}
             </p>
             <p className="demo-text-12 font-bold">{event.text}</p>
-          </motion.li>
+          </m.li>
         ))}
       </ol>
-      <motion.div
+      <m.div
         initial={false}
         animate={{ opacity: step > events.length ? 1 : 0.15, y: step > events.length ? 0 : 8 }}
         className="mt-4 flex items-center gap-3 rounded-xl bg-[#102b38] px-3.5 py-3 text-[#fffaf0]"
       >
         <FileLock2 className="size-5 shrink-0 text-[#bceba8]" />
         <div className="min-w-0 flex-1">
-          <p className="truncate demo-text-12 font-black">MF-000042 · версия 2.pdf</p>
+          <p className="truncate demo-text-12 font-black">ПР-042 · версия 2.pdf</p>
           <p className="flex items-center gap-1 truncate font-mono demo-text-8 tracking-[0.08em] text-[#b8ced2]">
             <Fingerprint className="size-3" /> ОТПЕЧАТЪК 3f9a…c21e
           </p>
         </div>
-      </motion.div>
+      </m.div>
     </DemoFrame>
   );
 }

@@ -334,3 +334,57 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Hero entrance: CSS, so it starts with the first paint instead of after hydration. */
+@keyframes mf-rise {
+  from {
+    opacity: 0;
+    transform: translateY(1.75rem);
+  }
+}
+
+@keyframes mf-rise-solid {
+  from {
+    transform: translateY(1.75rem);
+  }
+}
+
+.mf-rise {
+  animation: mf-rise 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.mf-rise-solid {
+  animation: mf-rise-solid 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Hero blobs drift on large screens only; on phones they are small and still. */
+@keyframes mf-drift {
+  50% {
+    transform: translate(1.5rem, -1.125rem);
+  }
+}
+
+@keyframes mf-breathe {
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+@media (width >= 64rem) {
+  .mf-drift {
+    animation: mf-drift 10s ease-in-out infinite;
+  }
+
+  .mf-breathe {
+    animation: mf-breathe 8s ease-in-out infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mf-rise,
+  .mf-rise-solid,
+  .mf-drift,
+  .mf-breathe {
+    animation: none;
+  }
+}
