@@ -36,14 +36,14 @@ export function HistoryDemo() {
             className="relative pb-3.5 last:pb-0"
           >
             <span
-              className={`absolute -left-[26px] top-1 size-2.5 rounded-full border-2 border-[#fffdf7] ${
+              className={`absolute -left-[1.625rem] top-1 size-2.5 rounded-full border-2 border-[#fffdf7] ${
                 index === events.length - 1 ? "bg-[#16916d]" : "bg-[#ff765f]"
               }`}
             />
-            <p className="font-mono text-[9px] text-[#6c858d]">
+            <p className="font-mono demo-text-9 text-[#6c858d]">
               {event.time} · {event.who}
             </p>
-            <p className="text-[12px] font-bold">{event.text}</p>
+            <p className="demo-text-12 font-bold">{event.text}</p>
           </motion.li>
         ))}
       </ol>
@@ -54,8 +54,8 @@ export function HistoryDemo() {
       >
         <FileLock2 className="size-5 shrink-0 text-[#bceba8]" />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[12px] font-black">MF-000042 · версия 2.pdf</p>
-          <p className="flex items-center gap-1 truncate font-mono text-[8px] tracking-[0.08em] text-[#b8ced2]">
+          <p className="truncate demo-text-12 font-black">MF-000042 · версия 2.pdf</p>
+          <p className="flex items-center gap-1 truncate font-mono demo-text-8 tracking-[0.08em] text-[#b8ced2]">
             <Fingerprint className="size-3" /> ОТПЕЧАТЪК 3f9a…c21e
           </p>
         </div>

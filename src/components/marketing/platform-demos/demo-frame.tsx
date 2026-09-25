@@ -41,7 +41,7 @@ export function DemoFrame({
   return (
     <div
       ref={frameRef}
-      className="mf-demo overflow-hidden rounded-[22px] border border-[#102b38]/15 bg-[#fffdf7] shadow-[0_30px_70px_rgba(16,43,56,.14)]"
+      className="mf-demo overflow-hidden rounded-[1.375rem] border border-[#102b38]/15 bg-[#fffdf7] shadow-[0_30px_70px_rgba(16,43,56,.14)]"
     >
       <div className="flex items-center justify-between gap-3 border-b border-[#102b38]/10 bg-[#f4efe4]/70 px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -51,10 +51,10 @@ export function DemoFrame({
             <i className="size-2 rounded-full bg-[#bceba8]" />
           </span>
           <div className="min-w-0">
-            <p className="truncate font-mono text-[8px] tracking-[0.14em] text-[#6c858d]">
+            <p className="truncate font-mono demo-text-8 tracking-[0.14em] text-[#6c858d]">
               {crumb}
             </p>
-            <p className="truncate text-[13px] font-black tracking-[-0.03em]">
+            <p className="truncate demo-text-13 font-black tracking-[-0.03em]">
               {title}
             </p>
           </div>
@@ -82,7 +82,7 @@ export function StatusChip({
 
   return (
     <span
-      className={`shrink-0 rounded-full px-2.5 py-1 font-mono text-[8px] font-bold tracking-[0.1em] transition-colors duration-500 ${tones[tone]}`}
+      className={`shrink-0 rounded-full px-2.5 py-1 font-mono demo-text-8 font-bold tracking-[0.1em] transition-colors duration-500 ${tones[tone]}`}
     >
       {children}
     </span>

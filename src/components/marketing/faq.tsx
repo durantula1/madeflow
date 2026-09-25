@@ -28,7 +28,7 @@ export const faqQuestions = [
 export function Faq() {
   return (
     <section id="faq" className="bg-[#f4efe4] px-[6vw] py-[14vh] lg:py-[16vh]">
-      <div className="mx-auto grid max-w-[1500px] gap-12 lg:grid-cols-[0.75fr_1.25fr]">
+      <div className="mx-auto grid max-w-[93.75rem] gap-12 lg:grid-cols-[0.75fr_1.25fr]">
         <Reveal>
           <p className="mf-kicker">ВЪПРОСИ</p>
           <h2 className="mf-section-title mt-10">
@@ -47,7 +47,7 @@ export function Faq() {
                     <Plus className="size-4" />
                   </span>
                 </summary>
-                <p className="max-w-2xl pb-6 text-[15px] leading-7 text-[#49626b]">{a}</p>
+                <p className="max-w-2xl pb-6 text-[0.9375rem] leading-7 text-[#49626b]">{a}</p>
               </details>
             ))}
           </div>

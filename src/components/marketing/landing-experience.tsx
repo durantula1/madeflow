@@ -36,7 +36,7 @@ export function LandingExperience({ signedIn = false }: { signedIn?: boolean }) 
       <div className="mf-grain" aria-hidden="true" />
       <motion.div
         style={{ scaleX: pageProgress }}
-        className="fixed left-0 top-0 z-[80] h-[3px] w-full origin-left bg-[#ff765f]"
+        className="fixed left-0 top-0 z-[80] h-[0.1875rem] w-full origin-left bg-[#ff765f]"
       />
 
       <header className="mf-nav fixed inset-x-0 top-0 z-50 flex items-center justify-between px-[5vw] py-5 text-[#102b38]">
@@ -53,13 +53,13 @@ export function LandingExperience({ signedIn = false }: { signedIn?: boolean }) 
             loading="eager"
             className="size-9 transition-transform group-hover:-rotate-6"
           />
-          <span className="text-[15px] font-black tracking-[-0.04em]">
+          <span className="text-[0.9375rem] font-black tracking-[-0.04em]">
             Pakto
           </span>
         </Link>
         <nav
           aria-label="Основна навигация"
-          className="hidden items-center gap-8 font-mono text-[9px] font-bold tracking-[0.12em] md:flex"
+          className="hidden items-center gap-8 font-mono text-[0.5625rem] font-bold tracking-[0.12em] md:flex"
         >
           <a href="#product">ПРОДУКТ</a>
           <a href="#workflow">КАК РАБОТИ</a>
@@ -71,7 +71,7 @@ export function LandingExperience({ signedIn = false }: { signedIn?: boolean }) 
             <Link
               href="/app"
               prefetch={true}
-              className="flex items-center gap-2 border border-[#102b38]/50 bg-[#ff765f] px-3.5 py-2.5 font-mono text-[9px] font-bold tracking-[0.09em] text-[#102b38]"
+              className="flex items-center gap-2 border border-[#102b38]/50 bg-[#ff765f] px-3.5 py-2.5 font-mono text-[0.5625rem] font-bold tracking-[0.09em] text-[#102b38]"
             >
               КЪМ ОБЕКТИТЕ <ArrowUpRight className="size-3.5" />
             </Link>
@@ -85,7 +85,7 @@ export function LandingExperience({ signedIn = false }: { signedIn?: boolean }) 
               </Link>
               <Link
                 href="/sign-up"
-                className="flex items-center gap-2 border border-[#102b38]/50 bg-[#f4efe4]/70 px-3.5 py-2.5 font-mono text-[9px] font-bold tracking-[0.09em] backdrop-blur-md transition-colors hover:bg-[#ff765f]"
+                className="flex items-center gap-2 border border-[#102b38]/50 bg-[#f4efe4]/70 px-3.5 py-2.5 font-mono text-[0.5625rem] font-bold tracking-[0.09em] backdrop-blur-md transition-colors hover:bg-[#ff765f]"
               >
                 ЗАПОЧНИ <ArrowUpRight className="size-3.5" />
               </Link>
@@ -94,22 +94,22 @@ export function LandingExperience({ signedIn = false }: { signedIn?: boolean }) 
         </div>
       </header>
 
-      <section className="mf-hero relative min-h-[820px] overflow-hidden px-[6vw] pb-14 pt-36 lg:min-h-screen lg:pt-[18vh]">
+      <section className="mf-hero relative min-h-[51.25rem] overflow-hidden px-[6vw] pb-14 pt-36 lg:min-h-screen lg:pt-[18vh]">
         <div className="mf-hero-grid absolute inset-0" />
         <motion.div
           aria-hidden="true"
-          className="absolute top-[6vh] right-[2vw] size-[min(44vw,560px)] rounded-full bg-[#a6d8df] blur-[2px]"
+          className="absolute top-[6vh] right-[2vw] size-[min(44vw,35rem)] rounded-full bg-[#a6d8df] blur-[2px]"
           animate={reduceMotion ? undefined : { x: [0, 24, 0], y: [0, -18, 0] }}
           transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
         />
         <motion.div
           aria-hidden="true"
-          className="absolute -bottom-[16vw] left-[30vw] size-[34vw] min-h-[300px] min-w-[300px] rounded-full bg-[#bceba8]/80 blur-[4px]"
+          className="absolute -bottom-[16vw] left-[30vw] size-[34vw] min-h-[18.75rem] min-w-[18.75rem] rounded-full bg-[#bceba8]/80 blur-[4px]"
           animate={reduceMotion ? undefined : { scale: [1, 1.08, 1] }}
           transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
         />
 
-        <div className="relative z-10 mx-auto max-w-[1500px]">
+        <div className="relative z-10 mx-auto max-w-[93.75rem]">
           <Reveal className="mf-kicker mb-7 flex items-center gap-3">
             <span className="size-2 rounded-full bg-[#ff765f]" />
             ОФЕРТИ И ПРОМЕНИ ПО ОБЕКТА · ОДОБРЕНИ С КОД
@@ -123,7 +123,7 @@ export function LandingExperience({ signedIn = false }: { signedIn?: boolean }) 
           </Reveal>
           <Reveal
             delay={0.14}
-            className="relative z-20 mt-9 max-w-[400px] lg:ml-[8vw]"
+            className="relative z-20 mt-9 max-w-[25rem] lg:ml-[8vw]"
           >
             <p className="text-base leading-7 text-[#284955] sm:text-lg">
               От офертата до решението на клиента — всяка версия, сума и
@@ -146,7 +146,7 @@ export function LandingExperience({ signedIn = false }: { signedIn?: boolean }) 
                 <ArrowDown className="size-5" />
               </a>
             </div>
-            <p className="mt-6 flex items-center gap-2 font-mono text-[9px] tracking-[0.12em] text-[#52707d]">
+            <p className="mt-6 flex items-center gap-2 font-mono text-[0.5625rem] tracking-[0.12em] text-[#52707d]">
               <Lock className="size-3.5" /> ЗАЩИТЕН ЛИНК · КОД ПО ИМЕЙЛ ·
               ЗАКЛЮЧЕНИ ВЕРСИИ
             </p>
@@ -155,7 +155,7 @@ export function LandingExperience({ signedIn = false }: { signedIn?: boolean }) 
           <RevisionStack />
         </div>
 
-        <div className="absolute bottom-8 left-[6vw] z-20 hidden items-center gap-3 font-mono text-[8px] tracking-[0.14em] lg:flex">
+        <div className="absolute bottom-8 left-[6vw] z-20 hidden items-center gap-3 font-mono text-[0.5rem] tracking-[0.14em] lg:flex">
           <span>ОФЕРТА</span>
           <i className="size-1.5 rounded-full bg-[#ff765f]" />
           <span>ПРОМЯНА</span>
@@ -183,7 +183,7 @@ export function LandingExperience({ signedIn = false }: { signedIn?: boolean }) 
         <div className="pointer-events-none absolute -bottom-[0.23em] -right-[0.03em] select-none text-[38vw] font-black leading-none tracking-[-0.16em] text-white/20">
           GO
         </div>
-        <div className="relative z-10 mx-auto max-w-[1500px]">
+        <div className="relative z-10 mx-auto max-w-[93.75rem]">
           <Reveal>
             <div className="mf-kicker flex items-center gap-3">
               <ShieldCheck className="size-4" /> БЕТА ДОСТЪП · БЕЗПЛАТНО
@@ -218,7 +218,7 @@ export function LandingExperience({ signedIn = false }: { signedIn?: boolean }) 
           </div>
           <p className="text-xs leading-5 text-[#9db5b6]">{productDefinition}</p>
         </div>
-        <div className="flex flex-wrap gap-x-8 gap-y-2 font-mono text-[8px] tracking-[0.14em] text-[#9db5b6]">
+        <div className="flex flex-wrap gap-x-8 gap-y-2 font-mono text-[0.5rem] tracking-[0.14em] text-[#9db5b6]">
           <span>© 2026 PAKTO</span>
           <span>СОФИЯ · БЪЛГАРИЯ</span>
           {Object.values(LEGAL_DOCUMENTS).map((document) => (

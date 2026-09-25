@@ -78,38 +78,38 @@ function DecisionCertificate() {
   const sealOpacity = useTransform(progress, [0.7, 0.9], [0, 1]);
 
   return (
-    <div ref={ref} className="mf-cert-stage relative mx-auto w-full max-w-[460px]">
+    <div ref={ref} className="mf-cert-stage relative mx-auto w-full max-w-[28.75rem]">
       <motion.div
         style={reduceMotion ? undefined : { rotateY, rotateX }}
-        className="mf-cert relative rounded-[28px] bg-[#fffaf0] p-6 text-[#102b38] shadow-[0_50px_100px_rgba(0,0,0,.45)] sm:p-8"
+        className="mf-cert relative rounded-[1.75rem] bg-[#fffaf0] p-6 text-[#102b38] shadow-[0_50px_100px_rgba(0,0,0,.45)] sm:p-8"
       >
         <div className="flex items-center justify-between border-b border-[#102b38]/10 pb-4">
-          <p className="flex items-center gap-2 font-mono text-[9px] font-bold tracking-[0.14em]">
+          <p className="flex items-center gap-2 font-mono text-[0.5625rem] font-bold tracking-[0.14em]">
             <BadgeCheck className="size-4 text-[#16916d]" /> ЗАПИС НА РЕШЕНИЕ
           </p>
-          <span className="rounded-full bg-[#d8f2e7] px-2.5 py-1 text-[9px] font-bold text-[#0b5d4f]">
+          <span className="rounded-full bg-[#d8f2e7] px-2.5 py-1 text-[0.5625rem] font-bold text-[#0b5d4f]">
             ОДОБРЕНО
           </span>
         </div>
         <dl className="divide-y divide-[#102b38]/8">
           {record.map(([label, value]) => (
             <div key={label} className="flex items-center justify-between gap-4 py-3">
-              <dt className="font-mono text-[8px] tracking-[0.12em] text-[#6c858d]">{label}</dt>
-              <dd className="text-right text-[13px] font-bold">{value}</dd>
+              <dt className="font-mono text-[0.5rem] tracking-[0.12em] text-[#6c858d]">{label}</dt>
+              <dd className="text-right text-[0.8125rem] font-bold">{value}</dd>
             </div>
           ))}
         </dl>
         <div className="mt-2 rounded-xl bg-[#102b38] p-3.5 text-[#e8f1ed]">
-          <p className="flex items-center gap-1.5 font-mono text-[8px] tracking-[0.12em] text-[#b8ced2]">
+          <p className="flex items-center gap-1.5 font-mono text-[0.5rem] tracking-[0.12em] text-[#b8ced2]">
             <Fingerprint className="size-3.5" /> ОТПЕЧАТЪК НА ОДОБРЕНОТО СЪДЪРЖАНИЕ
           </p>
-          <p className="mt-1.5 break-all font-mono text-[10px] leading-4">
+          <p className="mt-1.5 break-all font-mono text-[0.625rem] leading-4">
             3f9a8c02e7d1…b54e0a9dc21e
           </p>
         </div>
         <motion.div
           style={reduceMotion ? undefined : { scale: sealScale, opacity: sealOpacity }}
-          className="absolute -bottom-7 -right-5 grid size-24 rotate-[-14deg] place-items-center rounded-full border-4 border-[#102b38] bg-[#ff765f] text-center font-mono text-[8px] font-black leading-3 tracking-[0.1em] shadow-[0_18px_40px_rgba(0,0,0,.35)]"
+          className="absolute -bottom-7 -right-5 grid size-24 rotate-[-14deg] place-items-center rounded-full border-4 border-[#102b38] bg-[#ff765f] text-center font-mono text-[0.5rem] font-black leading-3 tracking-[0.1em] shadow-[0_18px_40px_rgba(0,0,0,.35)]"
         >
           <span>
             <KeyRound className="mx-auto mb-1 size-5" />
@@ -128,7 +128,7 @@ export function SecuritySection() {
       className="mf-security relative overflow-hidden px-[6vw] py-[14vh] text-[#fbf7ec] lg:py-[18vh]"
     >
       <div className="mf-story-grid absolute inset-0" aria-hidden="true" />
-      <div className="relative z-10 mx-auto max-w-[1500px]">
+      <div className="relative z-10 mx-auto max-w-[93.75rem]">
         <Reveal className="grid gap-8 lg:grid-cols-[0.75fr_1.25fr] lg:items-end">
           <p className="mf-kicker text-[#b8ecda]">СИГУРНОСТ · ДОВЕРИЕ · ДОКАЗАТЕЛСТВО</p>
           <div className="min-w-0">
@@ -162,22 +162,22 @@ export function SecuritySection() {
             <DecisionCertificate />
           </Reveal>
 
-          <div className="grid gap-px overflow-hidden rounded-[24px] border border-white/10 bg-white/10 sm:grid-cols-2">
+          <div className="grid gap-px overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/10 sm:grid-cols-2">
             {pillars.map(({ icon: Icon, title, text }, index) => (
               <Reveal key={title} delay={index * 0.05} className="bg-[#12364b]">
                 <article className="h-full p-6 sm:p-7">
                   <span className="grid size-10 place-items-center rounded-full bg-[#ff765f]/15 text-[#ff8f7a]">
-                    <Icon className="size-[18px]" />
+                    <Icon className="size-[1.125rem]" />
                   </span>
                   <h3 className="mt-5 text-lg font-black tracking-[-0.04em]">{title}</h3>
-                  <p className="mt-2 text-[13px] leading-6 text-[#b8ced2]">{text}</p>
+                  <p className="mt-2 text-[0.8125rem] leading-6 text-[#b8ced2]">{text}</p>
                 </article>
               </Reveal>
             ))}
           </div>
         </div>
 
-        <Reveal className="mt-12 flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-white/10 pt-6 font-mono text-[9px] tracking-[0.12em] text-[#9db5b6]">
+        <Reveal className="mt-12 flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-white/10 pt-6 font-mono text-[0.5625rem] tracking-[0.12em] text-[#9db5b6]">
           <span>КЛИЕНТСКИЯТ ПОРТАЛ:</span>
           <span>НЕ СЕ КЕШИРА</span>
           <span>НЕ ИЗПРАЩА REFERRER</span>

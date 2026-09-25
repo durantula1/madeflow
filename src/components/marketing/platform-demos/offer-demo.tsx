@@ -29,7 +29,7 @@ export function OfferDemo() {
         </StatusChip>
       }
     >
-      <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 px-1 pb-2 font-mono text-[8px] tracking-[0.12em] text-[#6c858d]">
+      <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 px-1 pb-2 font-mono demo-text-8 tracking-[0.12em] text-[#6c858d]">
         <span>ОПИСАНИЕ</span>
         <span>К-ВО</span>
         <span className="w-16 text-right">СУМА</span>
@@ -40,20 +40,20 @@ export function OfferDemo() {
             key={line.label}
             initial={false}
             animate={{ opacity: step > index ? 1 : 0.15, x: step > index ? 0 : 12 }}
-            className="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 rounded-xl bg-[#f4efe4] px-3.5 py-3 text-[12px]"
+            className="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 rounded-xl bg-[#f4efe4] px-3.5 py-3 demo-text-12"
           >
             <span className="truncate font-bold">{line.label}</span>
-            <span className="font-mono text-[10px] text-[#52707d]">
+            <span className="font-mono demo-text-10 text-[#52707d]">
               {line.qty} {line.unit} × {line.price} €
             </span>
-            <span className="w-16 text-right font-mono text-[11px]">
+            <span className="w-16 text-right font-mono demo-text-11">
               {format(Number(line.qty) * line.price)}
             </span>
           </motion.div>
         ))}
       </div>
       <div className="mt-4 grid grid-cols-[1fr_auto] gap-4 border-t border-[#102b38]/10 pt-4">
-        <div className="space-y-1 font-mono text-[10px] text-[#52707d]">
+        <div className="space-y-1 font-mono demo-text-10 text-[#52707d]">
           <p>БЕЗ ДДС · {format(subtotal)}</p>
           <p>ДДС 20% · {format(subtotal * 0.2)}</p>
           <p className="flex items-center gap-1.5">
@@ -61,9 +61,9 @@ export function OfferDemo() {
           </p>
         </div>
         <div className="text-right">
-          <p className="font-mono text-[8px] tracking-[0.12em] text-[#6c858d]">ОБЩО</p>
+          <p className="font-mono demo-text-8 tracking-[0.12em] text-[#6c858d]">ОБЩО</p>
           <p className="text-2xl font-black tracking-[-0.06em]">{format(subtotal * 1.2)}</p>
-          <p className="mt-1 font-mono text-[9px] text-[#16916d]">
+          <p className="mt-1 font-mono demo-text-9 text-[#16916d]">
             {step >= 5 ? "Одобрена · 14:02" : " "}
           </p>
         </div>

@@ -131,7 +131,7 @@ export function PlatformTour() {
 
   return (
     <section id="product" className="bg-[#f4efe4] px-[6vw] py-[14vh] lg:py-[18vh]">
-      <div className="mx-auto max-w-[1500px]">
+      <div className="mx-auto max-w-[93.75rem]">
         <Reveal className="grid gap-8 lg:grid-cols-[0.75fr_1.25fr] lg:items-end">
           <p className="mf-kicker">ЕДНА ПЛАТФОРМА · ЦЕЛИЯТ ОБЕКТ</p>
           <div>
@@ -148,12 +148,12 @@ export function PlatformTour() {
           </div>
         </Reveal>
 
-        <div className="mt-16 grid grid-cols-1 gap-10 lg:mt-24 lg:grid-cols-[240px_1fr] lg:gap-16">
+        <div className="mt-16 grid grid-cols-1 gap-10 lg:mt-24 lg:grid-cols-[15rem_1fr] lg:gap-16">
           <nav
             aria-label="Модули"
-            className="mf-tour-nav sticky top-[76px] z-20 -mx-[6vw] self-start px-[6vw] lg:top-32 lg:mx-0 lg:px-0"
+            className="mf-tour-nav sticky top-[4.75rem] z-20 -mx-[6vw] self-start px-[6vw] lg:top-32 lg:mx-0 lg:px-0"
           >
-            <p className="mb-4 hidden font-mono text-[9px] tracking-[0.14em] text-[#6c858d] lg:block">
+            <p className="mb-4 hidden font-mono text-[0.5625rem] tracking-[0.14em] text-[#6c858d] lg:block">
               МОДУЛИ
             </p>
             <ul ref={tabs} className="flex gap-1 overflow-x-auto py-3 lg:flex-col lg:gap-0 lg:overflow-visible lg:border-l lg:border-[#102b38]/15 lg:py-0">
@@ -164,20 +164,20 @@ export function PlatformTour() {
                     {isActive && (
                       <motion.span
                         layoutId="mf-tour-indicator"
-                        className="absolute inset-0 rounded-full bg-[#102b38] lg:inset-y-0 lg:-left-px lg:right-auto lg:w-[3px] lg:rounded-none lg:bg-[#ff765f]"
+                        className="absolute inset-0 rounded-full bg-[#102b38] lg:inset-y-0 lg:-left-px lg:right-auto lg:w-[0.1875rem] lg:rounded-none lg:bg-[#ff765f]"
                         transition={{ type: "spring", stiffness: 380, damping: 32 }}
                       />
                     )}
                     <a
                       href={`#${module.id}`}
                       aria-current={isActive ? "true" : undefined}
-                      className={`relative flex items-center gap-3 whitespace-nowrap rounded-full px-3.5 py-2 text-[12px] font-bold transition-colors lg:rounded-none lg:px-5 lg:py-2.5 lg:text-sm ${
+                      className={`relative flex items-center gap-3 whitespace-nowrap rounded-full px-3.5 py-2 text-[0.75rem] font-bold transition-colors lg:rounded-none lg:px-5 lg:py-2.5 lg:text-sm ${
                         isActive
                           ? "text-[#fffaf0] lg:text-[#102b38]"
                           : "text-[#52707d] hover:text-[#102b38]"
                       }`}
                     >
-                      <span className="hidden font-mono text-[9px] lg:inline">
+                      <span className="hidden font-mono text-[0.5625rem] lg:inline">
                         0{index + 1}
                       </span>
                       {module.nav}
@@ -199,18 +199,18 @@ export function PlatformTour() {
                 className="grid scroll-mt-40 grid-cols-1 gap-8 border-t border-[#102b38]/15 py-14 first:border-t-0 first:pt-0 lg:scroll-mt-32 xl:grid-cols-[0.8fr_1.2fr] xl:gap-12 xl:py-20"
               >
                 <div>
-                  <span className="inline-block rounded-full bg-[#c5e3e5] px-2.5 py-1 font-mono text-[8px] font-bold tracking-[0.12em]">
+                  <span className="inline-block rounded-full bg-[#c5e3e5] px-2.5 py-1 font-mono text-[0.5rem] font-bold tracking-[0.12em]">
                     0{index + 1} · {label}
                   </span>
                   <h3 className="mt-4 max-w-md text-3xl font-black leading-[0.98] tracking-[-0.06em] sm:text-4xl">
                     {title}
                   </h3>
-                  <p className="mt-4 max-w-md text-[15px] leading-7 text-[#49626b]">
+                  <p className="mt-4 max-w-md text-[0.9375rem] leading-7 text-[#49626b]">
                     {text}
                   </p>
                   <ul className="mt-5 space-y-2.5">
                     {points.map((point) => (
-                      <li key={point} className="flex items-start gap-2.5 text-[13px] font-bold">
+                      <li key={point} className="flex items-start gap-2.5 text-[0.8125rem] font-bold">
                         <span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full bg-[#bceba8]">
                           <Check className="size-2.5" />
                         </span>

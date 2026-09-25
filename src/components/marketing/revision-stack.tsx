@@ -49,7 +49,7 @@ export function RevisionStack() {
   const [visible, setVisible] = useState(true);
 
   useEffect(() => {
-    const query = window.matchMedia("(min-width: 1024px)");
+    const query = window.matchMedia("(width >= 64rem)");
     const update = () => {
       const canUseScene = !reduceMotion && query.matches && supportsWebGL();
       setAllowed(canUseScene);
@@ -77,7 +77,7 @@ export function RevisionStack() {
       <div
         ref={container}
         aria-hidden="true"
-        className="pointer-events-none absolute right-[-5vw] top-[-4vh] z-10 hidden h-[86vh] w-[58vw] lg:block xl:right-[-6vw] xl:w-[min(56vw,860px)]"
+        className="pointer-events-none absolute right-[-5vw] top-[-4vh] z-10 hidden h-[86vh] w-[58vw] lg:block xl:right-[-6vw] xl:w-[min(56vw,53.75rem)]"
       >
         {showScene && (
           <SceneBoundary onError={() => setAllowed(false)}>

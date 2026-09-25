@@ -38,7 +38,7 @@
 .mf-kicker,
 .mf-card-label {
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
   letter-spacing: 0.13em;
 }
@@ -75,7 +75,7 @@
 }
 
 .mf-hero-title {
-  max-width: 1060px;
+  max-width: 66.25rem;
   font-size: clamp(4.8rem, 10.8vw, 11.8rem);
 }
 
@@ -92,13 +92,13 @@
 .mf-primary-button,
 .mf-dark-button {
   display: inline-flex;
-  min-height: 48px;
+  min-height: 3rem;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding: 0 20px;
+  gap: 0.625rem;
+  padding: 0 1.25rem;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 9px;
+  font-size: 0.5625rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   transition:
@@ -121,8 +121,8 @@
 
 .mf-round-button {
   display: grid;
-  width: 48px;
-  height: 48px;
+  width: 3rem;
+  height: 3rem;
   place-items: center;
   border: 1px solid rgb(16 43 56 / 45%);
   border-radius: 50%;
@@ -151,15 +151,15 @@
 }
 
 .mf-story-copy h2 {
-  max-width: 720px;
+  max-width: 45rem;
   font-size: clamp(3.3rem, 6.6vw, 7.2rem);
 }
 
 .mf-story-copy > p {
-  max-width: 390px;
-  margin-top: 32px;
+  max-width: 24.375rem;
+  margin-top: 2rem;
   color: #c6d9da;
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.65;
 }
 
@@ -225,7 +225,7 @@
 }
 
 .mf-cta-title {
-  max-width: 1280px;
+  max-width: 80rem;
   font-size: clamp(4.2rem, 9.3vw, 10rem);
 }
 
@@ -235,16 +235,16 @@
   color: #fffaf0;
 }
 
-@media (min-width: 1024px) {
+@media (width >= 64rem) {
   .mf-tour-nav {
     background: transparent;
     backdrop-filter: none;
   }
 }
 
-@media (max-width: 1023px) {
+@media (width < 64rem) {
   .mf-hero {
-    min-height: 780px;
+    min-height: 48.75rem;
   }
 
   .mf-story-copy {
@@ -260,7 +260,7 @@
   }
 }
 
-@media (max-width: 767px) {
+@media (width < 48rem) {
   .mf-grain {
     opacity: 0.025;
   }
@@ -275,19 +275,19 @@
   }
 
   .mf-story-copy h2 {
-    margin-top: 14px;
+    margin-top: 0.875rem;
     font-size: clamp(2.5rem, 12vw, 4.4rem);
   }
 
   .mf-story-copy > p {
     max-width: 88vw;
-    margin-top: 18px;
-    font-size: 14px;
+    margin-top: 1.125rem;
+    font-size: 0.875rem;
     line-height: 1.55;
   }
 
   .mf-passport {
-    width: calc(100% - 48px);
+    width: calc(100% - 3rem);
     max-height: 100%;
     opacity: 1;
     mask-image: linear-gradient(to bottom, black 72%, transparent);
@@ -295,7 +295,7 @@
 
   .mf-story-rail {
     right: 8vw;
-    bottom: calc(4svh + 18px);
+    bottom: calc(4svh + 1.125rem);
     left: 8vw;
   }
 

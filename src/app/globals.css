@@ -4,6 +4,15 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Text inside the marketing mini-mockups: `demo-text-11` is 11/16 of the frame's `--demo-size`
+ * (1rem unless a frame sets it), so the whole mockup scales from one value and nested sizes
+ * never compound the way `em` would.
+ */
+@utility demo-text-* {
+  font-size: calc(var(--demo-size, 1rem) * --value(integer) / 16);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

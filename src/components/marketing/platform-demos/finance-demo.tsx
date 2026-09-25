@@ -28,10 +28,10 @@ export function FinanceDemo() {
       <div className="rounded-xl bg-[#102b38] p-4 text-[#fffaf0]">
         <div className="flex items-end justify-between">
           <div>
-            <p className="font-mono text-[8px] tracking-[0.12em] text-[#b8ced2]">ПОЛУЧЕНИ</p>
+            <p className="font-mono demo-text-8 tracking-[0.12em] text-[#b8ced2]">ПОЛУЧЕНИ</p>
             <p className="text-2xl font-black tracking-[-0.06em]">{format(paid)}</p>
           </div>
-          <p className="font-mono text-[9px] text-[#b8ced2]">ОСТАВА {format(total - paid)}</p>
+          <p className="font-mono demo-text-9 text-[#b8ced2]">ОСТАВА {format(total - paid)}</p>
         </div>
         <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/15">
           <motion.div
@@ -42,7 +42,7 @@ export function FinanceDemo() {
           />
         </div>
       </div>
-      <div className="mt-3 min-h-[150px] space-y-2">
+      <div className="mt-3 min-h-[9.375rem] space-y-2">
         <AnimatePresence initial={false}>
           {visible.map((payment) => (
             <motion.div
@@ -50,13 +50,13 @@ export function FinanceDemo() {
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="flex items-center justify-between rounded-xl bg-[#f4efe4] px-3.5 py-3 text-[12px]"
+              className="flex items-center justify-between rounded-xl bg-[#f4efe4] px-3.5 py-3 demo-text-12"
             >
               <span>
                 <b>{payment.label}</b>
-                <span className="ml-2 font-mono text-[9px] text-[#6c858d]">{payment.date} · {payment.method}</span>
+                <span className="ml-2 font-mono demo-text-9 text-[#6c858d]">{payment.date} · {payment.method}</span>
               </span>
-              <span className="font-mono text-[11px] text-[#16916d]">+{format(payment.amount)}</span>
+              <span className="font-mono demo-text-11 text-[#16916d]">+{format(payment.amount)}</span>
             </motion.div>
           ))}
         </AnimatePresence>
@@ -67,12 +67,12 @@ export function FinanceDemo() {
         className="mt-3 rounded-xl border border-[#102b38]/15 px-3.5 py-3"
       >
         <div className="flex items-center justify-between">
-          <p className="font-mono text-[8px] tracking-[0.12em] text-[#6c858d]">МЕСЕЧНА СПРАВКА</p>
-          <p className="text-[13px] font-black">Септември 2026</p>
+          <p className="font-mono demo-text-8 tracking-[0.12em] text-[#6c858d]">МЕСЕЧНА СПРАВКА</p>
+          <p className="demo-text-13 font-black">Септември 2026</p>
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {["Период", "Обект", "Вид плащане", "Метод"].map((filter) => (
-            <span key={filter} className="flex items-center gap-1 rounded-full bg-[#c5e3e5]/70 px-2.5 py-1 text-[9px] font-bold">
+            <span key={filter} className="flex items-center gap-1 rounded-full bg-[#c5e3e5]/70 px-2.5 py-1 demo-text-9 font-bold">
               <SlidersHorizontal className="size-3" /> {filter}
             </span>
           ))}

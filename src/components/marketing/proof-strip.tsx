@@ -4,7 +4,7 @@ import { Reveal } from "./reveal";
 export function ProofStrip() {
   return (
     <section className="relative overflow-hidden bg-[#ff765f] text-[#102b38]">
-      <div className="mx-auto grid max-w-[1500px] gap-8 px-[6vw] py-14 lg:grid-cols-[1.15fr_0.85fr] lg:items-end lg:gap-16 lg:py-16">
+      <div className="mx-auto grid max-w-[93.75rem] gap-8 px-[6vw] py-14 lg:grid-cols-[1.15fr_0.85fr] lg:items-end lg:gap-16 lg:py-16">
         <Reveal>
           <p className="mf-kicker">ЗВУЧИ ЛИ ПОЗНАТО?</p>
           <p className="mf-proof-quote mt-5">
