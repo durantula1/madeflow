@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   BookOpen,
@@ -20,6 +21,8 @@ import { MobileMoreMenu } from "@/components/workspace/mobile-more-menu";
 import { UserMenu } from "@/components/workspace/user-menu";
 import { ActionNotice } from "@/components/workspace/action-notice";
 import { AppBreadcrumb } from "@/components/workspace/app-breadcrumb";
+import { SidebarToggle } from "@/components/workspace/sidebar-toggle";
+import { SIDEBAR_COOKIE, WORKSPACE_SHELL_ID } from "@/components/workspace/sidebar-state";
 import { DeletionPendingBanner } from "@/components/settings/account-dialogs";
 import { can, roleLabel } from "@/lib/authz/permissions";
 import { getOptionalTenantContext } from "@/lib/authz/tenant-context";
@@ -35,7 +38,8 @@ export default async function WorkspaceLayout({
 }) {
   const context = await getOptionalTenantContext();
   if (!context) redirect("/onboarding");
-  const account = await getAccountSummary(context.userId);
+  const [account, cookieStore] = await Promise.all([getAccountSummary(context.userId), cookies()]);
+  const sidebarCollapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "collapsed";
   const pendingDeletion = account?.deletionRequestedAt ?? null;
   const userMenu = {
     name: account?.displayName ?? "Профил",
@@ -50,11 +54,11 @@ export default async function WorkspaceLayout({
       ? { href: "/app/offers/changes/new", label: "Нова промяна" }
       : null;
   return (
-    <div className="min-h-dvh bg-background lg:pl-60">
+    <div id={WORKSPACE_SHELL_ID} data-sidebar={sidebarCollapsed ? "collapsed" : "expanded"} className="group/shell min-h-dvh bg-background transition-[padding] duration-200 motion-reduce:transition-none lg:pl-60 lg:data-[sidebar=collapsed]:pl-16">
       <LiveNotifications userId={context.userId} />
       <Suspense fallback={null}><ActionNotice /></Suspense>
-      <aside className="hidden flex-col border-r border-sidebar-border bg-sidebar p-4 text-sidebar-foreground lg:fixed lg:inset-y-0 lg:left-0 lg:flex lg:h-dvh lg:w-60 lg:overflow-y-auto">
-        <Wordmark inverse className="px-2 py-2" />
+      <aside className="hidden flex-col overflow-x-hidden border-r border-sidebar-border bg-sidebar p-4 text-sidebar-foreground transition-[width,padding] duration-200 motion-reduce:transition-none lg:fixed lg:inset-y-0 lg:left-0 lg:flex lg:h-dvh lg:w-60 lg:overflow-y-auto lg:group-data-[sidebar=collapsed]/shell:w-16 lg:group-data-[sidebar=collapsed]/shell:px-2">
+        <Wordmark inverse className="px-2 py-2 lg:group-data-[sidebar=collapsed]/shell:px-1.5" textClassName="lg:group-data-[sidebar=collapsed]/shell:sr-only" />
         <nav className="mt-8 space-y-1">
           <NavLink
             href="/app"
@@ -89,14 +93,16 @@ export default async function WorkspaceLayout({
       <section className="min-w-0 pb-24 lg:pb-0">
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/90 px-4 backdrop-blur sm:px-6 lg:h-12 lg:px-6">
           <Wordmark href="/app" className="lg:hidden" />
-          <div className="hidden min-w-0 lg:block">
+          <div className="hidden min-w-0 items-center gap-2 lg:flex">
+            <SidebarToggle />
             <AppBreadcrumb organizationName={context.organizationName} />
           </div>
           <div className="lg:hidden">
             <UserMenu variant="header" {...userMenu} />
           </div>
         </header>
-        <main className="max-w-content p-4 sm:p-6">
+        {/* Collapsing gives the content the 11rem the sidebar frees (w-60 → w-16), not just a left shift. */}
+        <main className="max-w-content p-4 transition-[max-width] duration-200 motion-reduce:transition-none sm:p-6 lg:group-data-[sidebar=collapsed]/shell:max-w-[93.5rem]">
           {pendingDeletion ? <div className="mb-6"><DeletionPendingBanner deleteOn={deletionDateFormat.format(accountDeletionDate(pendingDeletion))} companyName={account?.closureRequested ? context.organizationName : null} /></div> : null}
           {children}
         </main>

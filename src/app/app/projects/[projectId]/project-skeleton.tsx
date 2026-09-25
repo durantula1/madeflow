@@ -11,8 +11,8 @@ export const projectStatLabels = {
   deadline: "Краен срок",
 };
 
-/** "Остава" turns coral only when an installment is overdue, which is unknown while loading. */
-const projectStatTones: Record<keyof typeof projectStatLabels, StatTone> = { price: "mint", paid: "teal", remaining: "blue", deadline: "blue" };
+/** "Остава" and "Краен срок" turn coral when overdue, which is unknown while loading. */
+const projectStatTones: Record<keyof typeof projectStatLabels, StatTone> = { price: "mint", paid: "teal", remaining: "sand", deadline: "blue" };
 
 export const projectStatusLabels: Record<string, string> = { active: "Активен", completed: "Завършен", archived: "Архивиран" };
 

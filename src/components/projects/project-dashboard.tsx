@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyResult } from "@/components/workspace/page/empty-result";
+import { ProjectTabLink } from "@/components/projects/project-tabs";
 import { cn } from "@/lib/utils";
 import { cents, formatCents, type getProjectState } from "@/modules/projects/state";
 
@@ -28,12 +29,12 @@ export const overviewGridClassName = "grid gap-4 lg:grid-cols-2";
 const linkClassName = "text-sm font-medium text-primary underline-offset-4 hover:underline";
 const rowClassName = "flex min-h-8 items-center justify-between gap-3 border-t pt-2 first:border-t-0 first:pt-0";
 
-function OverviewCard({ title, href, children }: { title: string; href?: string; children: ReactNode }) {
+function OverviewCard({ title, tab, children }: { title: string; tab?: string; children: ReactNode }) {
   return (
     <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
-        {href ? <CardAction><Link href={href} className={linkClassName}>Всички</Link></CardAction> : null}
+        {tab ? <CardAction><ProjectTabLink tab={tab} className={linkClassName}>Всички</ProjectTabLink></CardAction> : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-2">{children}</CardContent>
     </Card>
@@ -47,14 +48,12 @@ function StageBadge({ item, today }: { item: Milestone; today: string }) {
   return <Badge variant="secondary">{stageLabels[item.status] ?? item.status}</Badge>;
 }
 
-export function ProjectDashboard({ project, state, path, today, showPayments, openDisputes, paymentsHref }: {
+export function ProjectDashboard({ project, state, today, showPayments, openDisputes }: {
   project: { contactName: string | null; contactEmail: string | null; contactPhone: string | null; contactEmailVerifiedAt: Date | null };
   state: ProjectState;
-  path: string;
   today: string;
   showPayments: boolean;
   openDisputes: number;
-  paymentsHref: string;
 }) {
   const completed = state.milestones.filter((item) => item.status === "completed");
   const open = state.milestones.filter((item) => item.status !== "completed");
@@ -73,7 +72,7 @@ export function ProjectDashboard({ project, state, path, today, showPayments, op
 
   return (
     <div className={overviewGridClassName}>
-      <OverviewCard title={overviewCardTitles.stages} href={`${path}?tab=work`}>
+      <OverviewCard title={overviewCardTitles.stages} tab="work">
         {state.milestones.length ? <>
           <div className="flex items-center justify-between gap-3 text-sm">
             <span className="font-medium">{completed.length} от {state.milestones.length} завършени</span>
@@ -94,7 +93,7 @@ export function ProjectDashboard({ project, state, path, today, showPayments, op
         </> : <EmptyResult title="Още няма планирани етапи." />}
       </OverviewCard>
 
-      {showPayments ? <OverviewCard title={overviewCardTitles.payments} href={paymentsHref}>
+      {showPayments ? <OverviewCard title={overviewCardTitles.payments} tab="payments">
         {openDisputes || overdueInstallments ? <div className="flex flex-wrap gap-2 pb-1">
           {openDisputes ? <Badge variant="danger-soft">Оспорени: {openDisputes}</Badge> : null}
           {overdueInstallments ? <Badge variant="warning-soft">Просрочени вноски: {overdueInstallments}</Badge> : null}
@@ -115,7 +114,7 @@ export function ProjectDashboard({ project, state, path, today, showPayments, op
         }) : <EmptyResult title="Още няма получени плащания." />}
       </OverviewCard> : null}
 
-      <OverviewCard title={overviewCardTitles.documents} href={`${path}?tab=documents`}>
+      <OverviewCard title={overviewCardTitles.documents} tab="documents">
         {documents.length ? <>
           {documents.map((item) => (
             <Link key={item.id} href={`/app/offers/${item.id}`} className={cn(rowClassName, "hover:text-primary")}>

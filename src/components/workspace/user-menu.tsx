@@ -54,14 +54,14 @@ export function UserMenu({ name, email, roleLabel, organizationName, owner, vari
       {variant === "sidebar" ? (
         <AriaButton
           aria-label="Профил и настройки"
-          className="flex w-full items-center gap-2.5 rounded-xl p-2 text-left outline-none hover:bg-sidebar-accent focus-visible:ring-3 focus-visible:ring-sidebar-ring/50 pressed:bg-sidebar-accent"
+          className="flex w-full items-center gap-2.5 rounded-xl p-2 text-left lg:group-data-[sidebar=collapsed]/shell:justify-center outline-none hover:bg-sidebar-accent focus-visible:ring-3 focus-visible:ring-sidebar-ring/50 pressed:bg-sidebar-accent"
         >
           <UserAvatar name={name} />
-          <span className="min-w-0 flex-1">
+          <span className="min-w-0 flex-1 lg:group-data-[sidebar=collapsed]/shell:sr-only">
             <span className="block truncate text-sm font-medium">{name}</span>
             <span className="block truncate text-xs text-sidebar-foreground/55">{email}</span>
           </span>
-          <ChevronsUpDown className="size-4 shrink-0 text-sidebar-foreground/55" />
+          <ChevronsUpDown className="size-4 shrink-0 text-sidebar-foreground/55 lg:group-data-[sidebar=collapsed]/shell:hidden" />
         </AriaButton>
       ) : (
         <AriaButton aria-label="Профил и настройки" className="grid size-10 place-items-center rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50">

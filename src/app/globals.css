@@ -45,6 +45,8 @@
   --color-tile-teal-foreground: var(--tile-teal-foreground);
   --color-tile-blue: var(--tile-blue);
   --color-tile-blue-foreground: var(--tile-blue-foreground);
+  --color-tile-sand: var(--tile-sand);
+  --color-tile-sand-foreground: var(--tile-sand-foreground);
   --color-tile-coral: var(--tile-coral);
   --color-tile-coral-foreground: var(--tile-coral-foreground);
   --radius-sm: calc(var(--radius) * 0.6);
@@ -97,6 +99,8 @@
   --tile-teal-foreground: #0b5d4f;
   --tile-blue: #deeff2;
   --tile-blue-foreground: #18394c;
+  --tile-sand: #f8ead0;
+  --tile-sand-foreground: #6b4a12;
   --tile-coral: #ffe3dc;
   --tile-coral-foreground: #8f2f1f;
   --sidebar: #102b38;

@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BreadcrumbCurrent } from "@/components/workspace/app-breadcrumb";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ProjectTabs } from "@/components/projects/project-tabs";
 import { NotesPanel } from "@/components/notes/notes-panel";
 import { listNotes } from "@/modules/notes/queries";
 import { ActionForm, ActionSubmit } from "@/components/workspace/action-form";
@@ -113,10 +114,10 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
       <div className={projectStatsClassName}>
         <StatCard tone="mint" label={projectStatLabels.price} value={state.offer ? formatCents(state.contractMinor, state.currency) : "—"} hint={state.offer ? (state.changes.length ? `Оферта и ${state.changes.length} ${state.changes.length === 1 ? "промяна" : "промени"}` : "Основна оферта") : "Очаква одобрена оферта"} />
         <StatCard tone="teal" label={projectStatLabels.paid} value={formatCents(state.paidMinor, state.currency)} hint={paidPercent !== null ? `${paidPercent}% от договореното` : `${state.receiptsTotal} ${state.receiptsTotal === 1 ? "плащане" : "плащания"}`} />
-        <StatCard tone={overdueMinor > 0n ? "coral" : "blue"} label={projectStatLabels.remaining} value={state.offer ? formatCents(state.remainingMinor, state.currency) : "—"} hint={overdueMinor > 0n ? `Просрочено ${formatCents(overdueMinor, state.currency)}` : state.offer && state.remainingMinor <= 0n ? "Изплатено изцяло" : "Няма просрочени вноски"} />
-        <StatCard tone="blue" label={projectStatLabels.deadline} value={state.deadline ? formatDay(state.deadline) : "—"} hint={daysToDeadline === null ? "Очаква одобрение" : daysToDeadline > 0 ? `След ${daysToDeadline} ${daysToDeadline === 1 ? "ден" : "дни"}` : daysToDeadline === 0 ? "Днес" : `Изтекъл преди ${-daysToDeadline} ${daysToDeadline === -1 ? "ден" : "дни"}`} />
+        <StatCard tone={overdueMinor > 0n ? "coral" : "sand"} label={projectStatLabels.remaining} value={state.offer ? formatCents(state.remainingMinor, state.currency) : "—"} hint={overdueMinor > 0n ? `Просрочено ${formatCents(overdueMinor, state.currency)}` : state.offer && state.remainingMinor <= 0n ? "Изплатено изцяло" : "Няма просрочени вноски"} />
+        <StatCard tone={daysToDeadline !== null && daysToDeadline < 0 && project.status === "active" ? "coral" : "blue"} label={projectStatLabels.deadline} value={state.deadline ? formatDay(state.deadline) : "—"} hint={daysToDeadline === null ? "Очаква одобрение" : daysToDeadline > 0 ? `След ${daysToDeadline} ${daysToDeadline === 1 ? "ден" : "дни"}` : daysToDeadline === 0 ? "Днес" : `Изтекъл преди ${-daysToDeadline} ${daysToDeadline === -1 ? "ден" : "дни"}`} />
       </div>
-      <Tabs key={tab} defaultSelectedKey={(tab === "payments" && !showPayments) || (tab === "notes" && !canNotes) ? "overview" : tab}>
+      <ProjectTabs key={tab} defaultTab={(tab === "payments" && !showPayments) || (tab === "notes" && !canNotes) ? "overview" : tab}>
         <TabsList>
           <TabsTrigger id="overview">{projectTabLabels.overview}</TabsTrigger>
           <TabsTrigger id="documents">{projectTabLabels.documents}</TabsTrigger>
@@ -128,11 +129,9 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
           <ProjectDashboard
             project={project}
             state={state}
-            path={path}
             today={today}
             showPayments={showPayments}
             openDisputes={disputes.length}
-            paymentsHref={allReceiptsHref ?? `${path}?tab=payments`}
           />
         </TabsContent>
         <TabsContent id="documents" className="flex flex-col gap-5 pt-5">
@@ -202,7 +201,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
           <ProjectControls state={state} canManage={canManage} canRecordPayments={canRecordPayments} disputes={disputes} section="payments" />
         </TabsContent> : null}
         {canNotes ? <TabsContent id="notes" className="pt-5"><NotesPanel projectId={projectId} notes={notes} currentUserId={context.userId} isOwner={member.role === "owner"} /></TabsContent> : null}
-      </Tabs>
+      </ProjectTabs>
     </PageShell>
   );
 }

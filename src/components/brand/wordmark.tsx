@@ -6,9 +6,11 @@ export function Wordmark({
   inverse = false,
   className,
   href,
+  textClassName,
 }: {
   inverse?: boolean;
   className?: string;
+  textClassName?: string;
   href?: string | null;
 }) {
   const content = (
@@ -25,6 +27,7 @@ export function Wordmark({
         className={cn(
           "text-[1.1875rem] font-extrabold tracking-[-0.05em]",
           inverse ? "text-[#fffaf0]" : "text-[#102b38]",
+          textClassName,
         )}
       >
         Pakto

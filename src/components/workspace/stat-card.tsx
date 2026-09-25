@@ -12,12 +12,13 @@ const valueSizes = {
   xl: "min-h-9 text-3xl tracking-tight",
 };
 
-/** A tone carries meaning (agreed, received, attention, time), so tiles never form a rainbow. */
+/** A tone carries meaning: mint agreed, teal received, sand still due, blue time, coral needs attention. */
 const tones = {
   default: "",
   mint: "bg-tile-mint text-tile-mint-foreground ring-transparent",
   teal: "bg-tile-teal text-tile-teal-foreground ring-transparent",
   blue: "bg-tile-blue text-tile-blue-foreground ring-transparent",
+  sand: "bg-tile-sand text-tile-sand-foreground ring-transparent",
   coral: "bg-tile-coral text-tile-coral-foreground ring-transparent",
 };
 
