@@ -106,7 +106,7 @@ export function LandingExperience() {
           <div className="mf-hero-grid absolute inset-0" />
           <div
             aria-hidden="true"
-            className="mf-drift absolute -right-[14vw] top-24 size-[48vw] rounded-full bg-[#a6d8df] blur-[2px] lg:top-[6vh] lg:right-[2vw] lg:size-[min(44vw,35rem)]"
+            className="mf-drift absolute bottom-6 -left-[10vw] size-[34vw] rounded-full bg-[#a6d8df] blur-[2px] lg:bottom-auto lg:left-auto lg:top-[6vh] lg:right-[2vw] lg:size-[min(44vw,35rem)]"
           />
           <div
             aria-hidden="true"
