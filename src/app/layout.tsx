@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Toaster } from "@/components/ui/sonner";
+import { productDefinition } from "@/lib/seo/site";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -10,8 +11,7 @@ export const metadata: Metadata = {
     default: "Pakto — допълнителната работа, договорена навреме",
     template: "%s · Pakto",
   },
-  description:
-    "Документирай промяната на обекта за под минута и получи ясно клиентско одобрение без регистрация.",
+  description: productDefinition,
   applicationName: "Pakto",
   openGraph: {
     title: "Pakto",

@@ -12,7 +12,7 @@
 
 | Променлива | Задължителна | Какво е | Бележки |
 |---|---|---|---|
-| `NEXT_PUBLIC_APP_URL` | да | Публичният адрес, напр. `https://app.pakto.bg` | Влиза в линковете към клиента, в имейлите и в auth пренасочванията. **Задава се при build**, защото е `NEXT_PUBLIC_`. |
+| `NEXT_PUBLIC_APP_URL` | да | Публичният адрес, напр. `https://app.pakto.bg` | Влиза в линковете към клиента, в имейлите, в auth пренасочванията и в SEO адресите (`robots.txt`, `sitemap.xml`, canonical, JSON-LD). Ако лендингът и приложението са на различни домейни, SEO адресите трябва да сочат към лендинга. **Задава се при build**, защото е `NEXT_PUBLIC_`. |
 | `NEXT_PUBLIC_SUPABASE_URL` | да | `https://mzmvtxjmdqucrfuajimd.supabase.co` | Задава се при build. |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | да | Publishable ключ от Supabase → Settings → API | Задава се при build. |
 | `DATABASE_URL` | да | Postgres connection string (pooler, transaction mode) | Сървърният код чете и пише само оттук. |

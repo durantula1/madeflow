@@ -2,7 +2,7 @@ import { Plus } from "lucide-react";
 
 import { Reveal } from "./reveal";
 
-const questions = [
+export const faqQuestions = [
   {
     q: "Трябва ли клиентът да си прави профил?",
     a: "Не. Клиентът получава защитен линк към обекта, вижда документите и решава от телефона си. Решението се потвърждава с еднократен код, изпратен на имейла му.",
@@ -39,7 +39,7 @@ export function Faq() {
         </Reveal>
         <Reveal delay={0.08}>
           <div className="border-t border-[#102b38]/20">
-            {questions.map(({ q, a }) => (
+            {faqQuestions.map(({ q, a }) => (
               <details key={q} className="mf-faq group border-b border-[#102b38]/20">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-6 py-6 text-lg font-black tracking-[-0.03em] sm:text-xl">
                   {q}

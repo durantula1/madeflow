@@ -20,6 +20,7 @@ import { ProofStrip } from "./proof-strip";
 import { Reveal } from "./reveal";
 import { RevisionStack } from "./revision-stack";
 import { SecuritySection } from "./security-section";
+import { productDefinition } from "@/lib/seo/site";
 
 export function LandingExperience({ signedIn = false }: { signedIn?: boolean }) {
   const reduceMotion = useReducedMotion();
@@ -211,8 +212,11 @@ export function LandingExperience({ signedIn = false }: { signedIn?: boolean }) 
       </section>
 
       <footer className="flex flex-col gap-5 bg-[#102b38] px-[6vw] py-8 text-[#d9e7e4] sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2 text-sm font-black">
-          <span className="size-2 rounded-full bg-[#ff765f]" /> Pakto
+        <div className="flex max-w-md flex-col gap-2">
+          <div className="flex items-center gap-2 text-sm font-black">
+            <span className="size-2 rounded-full bg-[#ff765f]" /> Pakto
+          </div>
+          <p className="text-xs leading-5 text-[#9db5b6]">{productDefinition}</p>
         </div>
         <div className="flex flex-wrap gap-x-8 gap-y-2 font-mono text-[8px] tracking-[0.14em] text-[#9db5b6]">
           <span>© 2026 PAKTO</span>

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { ACCOUNT_DELETION_GRACE_DAYS, LEGAL_DOCUMENTS } from "@/lib/legal";
 
-export const metadata: Metadata = { title: "Политика за поверителност" };
+export const metadata: Metadata = { title: "Политика за поверителност", alternates: { canonical: "/privacy" } };
 
 // TODO(legal): fill in the controller details in brackets and have a lawyer review before public launch.
 export default function PrivacyPage() {

@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { LEGAL_DOCUMENTS } from "@/lib/legal";
 
-export const metadata: Metadata = { title: "Условия за ползване" };
+export const metadata: Metadata = { title: "Условия за ползване", alternates: { canonical: "/terms" } };
 
 // TODO(legal): fill in the provider details in brackets and have a lawyer review before public launch.
 export default function TermsPage() {
