@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { PageHeader } from "@/components/workspace/page/page-header";
@@ -5,6 +6,8 @@ import { PageShell } from "@/components/workspace/page/page-shell";
 import { requireTenantContext } from "@/lib/authz/tenant-context";
 import { parsePage } from "@/lib/pagination";
 import { NotificationsTable, NotificationsTableSkeleton } from "./notifications-table";
+
+export const metadata: Metadata = { title: "Известия" };
 
 export default async function NotificationsPage({ searchParams }: PageProps<"/app/notifications">) {
   const [context, params] = await Promise.all([requireTenantContext(), searchParams]);

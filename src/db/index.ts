@@ -7,13 +7,13 @@ import { getServerEnvironment } from "@/lib/env/server";
 import * as schema from "@/db/schema";
 
 const globalDatabase = globalThis as unknown as {
-  madeflowSql?: ReturnType<typeof postgres>;
-  madeflowDb?: ReturnType<typeof drizzle<typeof schema>>;
+  paktoSql?: ReturnType<typeof postgres>;
+  paktoDb?: ReturnType<typeof drizzle<typeof schema>>;
 };
 
 function getSqlClient() {
-  if (!globalDatabase.madeflowSql) {
-    globalDatabase.madeflowSql = postgres(getServerEnvironment().DATABASE_URL, {
+  if (!globalDatabase.paktoSql) {
+    globalDatabase.paktoSql = postgres(getServerEnvironment().DATABASE_URL, {
       prepare: false,
       max: process.env.NODE_ENV === "production" ? 4 : 1,
       idle_timeout: 20,
@@ -22,10 +22,10 @@ function getSqlClient() {
     });
   }
 
-  return globalDatabase.madeflowSql;
+  return globalDatabase.paktoSql;
 }
 
 export function getDatabase() {
-  globalDatabase.madeflowDb ??= drizzle(getSqlClient(), { schema });
-  return globalDatabase.madeflowDb;
+  globalDatabase.paktoDb ??= drizzle(getSqlClient(), { schema });
+  return globalDatabase.paktoDb;
 }

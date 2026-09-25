@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -11,6 +12,7 @@ import { listNotes } from "@/modules/notes/queries";
 import { ActionForm, ActionSubmit } from "@/components/workspace/action-form";
 import { DataTable } from "@/components/workspace/data-table";
 import { DetailHeader } from "@/components/workspace/detail-header";
+import { EmptyResult } from "@/components/workspace/page/empty-result";
 import { PageShell } from "@/components/workspace/page/page-shell";
 import { StatCard } from "@/components/workspace/stat-card";
 import { FilterSelect } from "@/components/workspace/filter-select";
@@ -26,7 +28,7 @@ import { and, eq } from "drizzle-orm";
 import { lastPage, pageHref, pageOffset, parsePage } from "@/lib/pagination";
 import { countChangeOrders, listApprovedOffers, listChangeOrders } from "@/modules/change-orders/queries";
 import { documentCode } from "@/modules/change-orders/labels";
-import { getProject } from "@/modules/projects/queries";
+import { getProject, getProjectTitle } from "@/modules/projects/queries";
 import { formatCents, getProjectState } from "@/modules/projects/state";
 import { updateChangeWorkAction, updateMilestoneAction } from "@/modules/projects/operations";
 import { getActivePortalLink } from "@/modules/change-portal/links";
@@ -39,6 +41,11 @@ const paymentLabels: Record<string, string> = { deposit: "Капаро", progres
 const methodLabels: Record<string, string> = { cash: "В брой", bank: "Банков превод", card: "Карта", other: "Друго" };
 const tabs = ["overview", "documents", "work", "payments", "notes"] as const;
 const DOCUMENTS_PAGE_SIZE = 10;
+
+export async function generateMetadata({ params }: PageProps<"/app/projects/[projectId]">): Promise<Metadata> {
+  const [{ projectId }, context] = await Promise.all([params, requireTenantContext()]);
+  return { title: (await getProjectTitle(context, projectId)) ?? "Обекти" };
+}
 
 export default async function ProjectPage({ params, searchParams }: PageProps<"/app/projects/[projectId]">) {
   const [{ projectId }, query, context] = await Promise.all([params, searchParams, requireTenantContext()]);
@@ -107,7 +114,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
           <TabsTrigger id="documents">{projectTabLabels.documents}</TabsTrigger>
           <TabsTrigger id="work">{projectTabLabels.work}</TabsTrigger>
           {showPayments ? <TabsTrigger id="payments">{projectTabLabels.payments}</TabsTrigger> : null}
-          {canNotes ? <TabsTrigger id="notes">{projectTabLabels.notes}{notes.length ? <span className="ml-1 rounded-full bg-sidebar-accent px-1.5 text-[11px]">{notes.length}</span> : null}</TabsTrigger> : null}
+          {canNotes ? <TabsTrigger id="notes">{projectTabLabels.notes}{notes.length ? <span className="ml-1 rounded-full bg-sidebar-accent px-1.5 text-2xs">{notes.length}</span> : null}</TabsTrigger> : null}
         </TabsList>
         <TabsContent id="overview" className="flex flex-col gap-5 pt-5">
           <div className="grid gap-5 lg:grid-cols-2">
@@ -151,7 +158,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
                 canManage ? <ActionForm key="save" action={updateMilestoneAction} success="Етапът е обновен" className="flex items-end gap-2"><input type="hidden" name="projectId" value={projectId} /><input type="hidden" name="milestoneId" value={item.id} /><Field className="w-40"><FieldLabel className="sr-only">Статус</FieldLabel><FilterSelect name="status" value={item.status} options={[{ value: "planned", label: "Предстои" }, { value: "in_progress", label: "В работа" }, { value: "completed", label: "Завършен" }]} /></Field><ActionSubmit variant="outline">Запази</ActionSubmit></ActionForm> : null,
               ],
             }))}
-          /> : <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Още няма планирани етапи.</CardContent></Card>}
+          /> : <Card><EmptyResult title="Още няма планирани етапи." /></Card>}
           {state.changes.length ? <DataTable
             label="Допълнителна работа"
             columns={[{ id: "title", header: "Работа", mobile: "primary" }, { id: "status", header: "Статус" }, { id: "action", header: "", className: "whitespace-normal" }]}
@@ -184,7 +191,7 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
               <p className="text-muted-foreground">Последните {state.receipts.length} от {state.receiptsTotal} плащания</p>
               {allReceiptsHref ? <Link href={allReceiptsHref} className="font-medium text-primary underline">Всички плащания</Link> : null}
             </div> : undefined}
-          /> : <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">Още няма получени плащания.</CardContent></Card>}
+          /> : <Card><EmptyResult title="Още няма получени плащания." /></Card>}
           {state.installments.length ? <DataTable
             label="Записани вноски"
             columns={[{ id: "title", header: "Вноска", mobile: "primary" }, { id: "due", header: "Падеж" }, { id: "left", header: "Остава" }, { id: "amount", header: "Сума", className: "text-right" }]}

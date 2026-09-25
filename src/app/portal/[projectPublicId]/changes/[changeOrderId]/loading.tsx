@@ -8,7 +8,7 @@ export default function PortalChangeLoading() {
     <div aria-busy>
       <Skeleton className="h-4 w-24" />
       <div className="mt-3"><PortalHeaderSkeleton /></div>
-      <div className="mt-5 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="mt-5 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_21.25rem]">
         <div className="flex min-w-0 flex-col gap-3">
         <TabsSkeleton labels={["Детайли", "Решение"]} />
         <Card>

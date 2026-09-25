@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyResult } from "@/components/workspace/page/empty-result";
 import { cn } from "@/lib/utils";
 
 /**
@@ -36,19 +37,25 @@ export function PageShell({ width = "full", loading = false, className, children
   );
 }
 
-/** Fills the same slot as a table skeleton, so an empty result never makes the page jump. */
-export function EmptyState({ title, description, children }: {
+/**
+ * Fills the same slot as a table skeleton, so an empty result never makes the page jump.
+ * The content is the shared `EmptyResult`; pass `illustration={false}` for access messages.
+ */
+export function EmptyState({ title, description, children, illustration = true }: {
   title: string;
   description?: string;
   children?: ReactNode;
+  illustration?: boolean;
 }) {
   return (
     <Card className={cn("justify-center", tableSlotClassName)}>
-      <CardContent className="py-12 text-center">
-        <p className="font-medium">{title}</p>
-        {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
-        {children}
-      </CardContent>
+      {illustration ? <EmptyResult title={title} description={description}>{children}</EmptyResult> : (
+        <CardContent className="py-12 text-center">
+          <p className="font-medium">{title}</p>
+          {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
+          {children}
+        </CardContent>
+      )}
     </Card>
   );
 }

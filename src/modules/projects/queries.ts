@@ -158,3 +158,18 @@ export async function hasProjects(context: TenantContext) {
   const [row] = await getDatabase().select({ id: projects.id }).from(projects).where(visibleProjectFilter(context)).limit(1);
   return Boolean(row);
 }
+
+/** Tab title for a project page: the name, only when the caller could open the project. */
+export async function getProjectTitle(context: TenantContext, projectId: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(projectId)) return null;
+  const db = getDatabase();
+  const [project] = await db.select({ name: projects.name })
+    .from(projects)
+    .where(and(
+      eq(projects.organizationId, context.organizationId),
+      eq(projects.id, projectId),
+      seesAllProjects(context) ? undefined : exists(db.select({ id: projectMembers.projectId }).from(projectMembers).where(and(eq(projectMembers.projectId, projects.id), eq(projectMembers.userId, context.userId)))),
+    ))
+    .limit(1);
+  return project?.name ?? null;
+}

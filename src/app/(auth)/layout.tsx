@@ -35,10 +35,10 @@ export default function AuthLayout({
           {children}
         </div>
       </section>
-      <aside className="surface-grid relative hidden bg-sidebar py-12 pr-12 pl-28 text-sidebar-foreground [clip-path:url(#auth-wave)] lg:flex lg:flex-col lg:justify-end xl:pl-36">
+      <aside className="surface-grid relative hidden overflow-hidden bg-sidebar py-12 pr-12 pl-28 text-sidebar-foreground [clip-path:url(#auth-wave)] lg:flex lg:flex-col lg:justify-end xl:pl-36">
         <AuthStage />
         <div className="absolute top-12 left-28 z-10 text-sm font-medium text-[#ff765f] xl:left-36">
-          MadeFlow / beta
+          Pakto / beta
         </div>
         <blockquote className="relative z-10 max-w-2xl text-balance text-4xl font-medium leading-tight tracking-tight">
           „Вече не спорим какво беше уговорено. Всички виждаме една и съща

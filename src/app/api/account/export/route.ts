@@ -57,7 +57,7 @@ export async function GET() {
     createdDocuments,
     activity,
   };
-  const filename = `madeflow-my-data-${exportedAt.toISOString().slice(0, 10)}.json`;
+  const filename = `pakto-my-data-${exportedAt.toISOString().slice(0, 10)}.json`;
   return new Response(JSON.stringify(body, null, 2), {
     headers: {
       "Content-Type": "application/json; charset=utf-8",

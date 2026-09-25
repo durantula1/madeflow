@@ -17,7 +17,7 @@ export function MobileMoreMenu({ owner, finance }: { owner: boolean; finance: bo
     { href: "/app/guide", label: "Как работи", icon: Compass },
   ];
   return <SheetTrigger isOpen={open} onOpenChange={setOpen}>
-    <Button type="button" variant="ghost" className="mx-auto flex h-14 w-full max-w-20 flex-col gap-0.5 rounded-xl px-1 text-sidebar-foreground/65 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"><Menu className="size-5" /><span className="text-[10px]">Още</span></Button>
+    <Button type="button" variant="ghost" className="mx-auto flex h-14 w-full max-w-20 flex-col gap-0.5 rounded-xl px-1 text-sidebar-foreground/65 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"><Menu className="size-5" /><span className="text-3xs">Още</span></Button>
     <SheetContent side="bottom" className="max-h-[80dvh] overflow-y-auto rounded-t-2xl">
       <SheetHeader><SheetTitle>Още</SheetTitle><SheetDescription>Бърз достъп до преглед, каталог, екип, плащания и ръководството.</SheetDescription></SheetHeader>
       <div className="grid gap-1 p-4 pt-0">{items.map((item) => <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className="flex min-h-12 items-center gap-3 rounded-lg px-3 text-sm font-medium hover:bg-muted"><item.icon className="size-5 text-primary" />{item.label}</Link>)}</div>

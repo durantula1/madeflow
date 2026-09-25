@@ -1,37 +1,34 @@
 import { redirect } from "next/navigation";
+import { Banknote, Building2, CircleEllipsis, CreditCard, Landmark, TrendingDown, TrendingUp, Wallet, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataTable, DataTableSkeleton, type DataTableColumn } from "@/components/workspace/data-table";
 import { FinanceChart } from "@/components/workspace/finance-chart";
-import { FilterBarSkeleton, ListPagination, ListPaginationSkeleton } from "@/components/workspace/list-filters";
+import { ListPagination, ListPaginationSkeleton } from "@/components/workspace/list-filters";
+import { EmptyResultAction, EmptyResultActions } from "@/components/workspace/page/empty-result";
 import { EmptyState } from "@/components/workspace/page/page-shell";
 import type { TenantContext } from "@/lib/authz/tenant-context";
 import { lastPage, PAGE_SIZE, pageHref, pageOffset } from "@/lib/pagination";
+import { cn } from "@/lib/utils";
 import { countReceipts, listReceipts, sumReceiptsByMonth, type ReceiptFilters } from "@/modules/finance/queries";
 import { cents, formatCents } from "@/modules/projects/state";
-
-export const kindOptions = [{ value: "all", label: "Всички видове" }, { value: "deposit", label: "Капаро" }, { value: "progress", label: "Междинно" }, { value: "final", label: "Окончателно" }, { value: "other", label: "Друго" }];
-export const methodOptions = [{ value: "all", label: "Всички методи" }, { value: "bank", label: "Банков превод" }, { value: "cash", label: "В брой" }, { value: "card", label: "Карта" }, { value: "other", label: "Друго" }];
-
-/** Labels and widths shared by the real filter bar and its skeleton. */
-export const financeFilterFields = {
-  from: { label: "От", className: "w-44 max-sm:w-[calc(50%-0.375rem)]" },
-  to: { label: "До", className: "w-44 max-sm:w-[calc(50%-0.375rem)]" },
-  project: { label: "Обект", className: "w-48 max-sm:w-full" },
-  kind: { label: "Вид", className: "w-40 max-sm:w-[calc(50%-0.375rem)]" },
-  method: { label: "Метод", className: "w-40 max-sm:w-[calc(50%-0.375rem)]" },
-};
+import { financeToolbarWidths, formatIsoDate, kindOptions, methodOptions } from "./finance-filters";
 
 const label = "Получени плащания";
 
 const columns: DataTableColumn[] = [
-  { id: "date", header: "Дата" },
-  { id: "project", header: "Обект" },
+  { id: "date", header: "Дата", className: "w-28 tabular-nums" },
+  { id: "project", header: "Обект", mobile: "primary" },
   { id: "kind", header: "Вид", skeleton: "badge" },
+  { id: "method", header: "Метод" },
   { id: "amount", header: "Сума", className: "text-right" },
 ];
+
+const methodIcons: Record<string, typeof Landmark> = { bank: Landmark, cash: Banknote, card: CreditCard };
+
+const monthName = new Intl.DateTimeFormat("bg-BG", { month: "long", timeZone: "UTC" });
 
 function monthOffset(month: string, offset: number) {
   const [year, part] = month.split("-").map(Number);
@@ -39,63 +36,135 @@ function monthOffset(month: string, offset: number) {
   return date.toISOString().slice(0, 7);
 }
 
-function SummaryCard({ children }: { children: React.ReactNode }) {
-  return <Card><CardContent><p className="text-sm text-muted-foreground">Получено в EUR</p><div className="mt-2 flex h-8 items-center text-2xl font-semibold">{children}</div></CardContent></Card>;
+/** The range of the same length that ends the day before `from`. */
+function previousRange(from: string, to: string) {
+  const day = 86_400_000;
+  const start = Date.parse(`${from}T00:00:00Z`);
+  const length = Date.parse(`${to}T00:00:00Z`) - start;
+  const previousTo = start - day;
+  return { from: new Date(previousTo - length).toISOString().slice(0, 10), to: new Date(previousTo).toISOString().slice(0, 10) };
 }
 
-function ChartCard({ children }: { children: React.ReactNode }) {
-  return <Card><CardHeader><CardTitle>По месеци</CardTitle></CardHeader><CardContent>{children}</CardContent></Card>;
+function sum(rows: { total: string }[]) {
+  return rows.reduce((total, row) => total + cents(row.total), 0n);
 }
 
-export async function FinanceContent({ context, filters, page, searchState }: {
+/** One card: totals on the left, the monthly bars on the right. The skeleton fills the same slots. */
+function SummaryFrame({ total, delta, facts, chart }: {
+  total: React.ReactNode;
+  delta: React.ReactNode;
+  facts: React.ReactNode;
+  chart: React.ReactNode;
+}) {
+  return <Card className="grid gap-4 p-4 lg:grid-cols-[minmax(15rem,auto)_1fr] lg:gap-6">
+    <div className="flex flex-col justify-center gap-1">
+      <p className="flex items-center gap-1.5 text-sm text-muted-foreground"><Wallet className="size-4" />Получено</p>
+      <div className="flex h-8 items-center text-2xl font-semibold tabular-nums">{total}</div>
+      <div className="flex h-4 items-center text-xs">{delta}</div>
+      <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground">{facts}</div>
+    </div>
+    <div className="min-w-0">{chart}</div>
+  </Card>;
+}
+
+function Delta({ current, previous }: { current: bigint; previous: bigint }) {
+  if (previous === 0n) return <span className="text-muted-foreground">Няма плащания в предходния период</span>;
+  const change = Number(((current - previous) * 1000n) / previous) / 10;
+  const up = change >= 0;
+  const Icon = up ? TrendingUp : TrendingDown;
+  return <span className="flex items-center gap-1">
+    <span className={cn("flex items-center gap-0.5 font-medium", up ? "text-emerald-700 dark:text-emerald-400" : "text-destructive")}>
+      <Icon className="size-3.5" />{up ? "+" : ""}{change.toLocaleString("bg-BG", { maximumFractionDigits: 1 })}%
+    </span>
+    <span className="text-muted-foreground">спрямо предходния период</span>
+  </span>;
+}
+
+/** No receipts at all reads as a first step; no match for the filters offers a way back. */
+function FinanceEmpty({ filtered, from, to }: { filtered: boolean; from: string; to: string }) {
+  return filtered
+    ? <EmptyState title="Нищо не отговаря на филтрите" description={`Няма плащания между ${formatIsoDate(from)} и ${formatIsoDate(to)} с избраните филтри.`}>
+      <EmptyResultActions><EmptyResultAction href="/app/finance"><X />Изчисти филтрите</EmptyResultAction></EmptyResultActions>
+    </EmptyState>
+    : <EmptyState title="Все още няма плащания" description="Плащанията се записват от страницата на обекта: капаро, междинно или окончателно.">
+      <EmptyResultActions><EmptyResultAction href="/app/projects" primary><Building2 />Към обектите</EmptyResultAction></EmptyResultActions>
+    </EmptyState>;
+}
+
+export async function FinanceContent({ context, filters, filtered, page, searchState }: {
   context: TenantContext;
   filters: ReceiptFilters & { from: string; to: string };
+  /** Any filter differs from the defaults, so an empty result means "no match", not "nothing yet". */
+  filtered: boolean;
   page: number;
   searchState: Record<string, string>;
 }) {
-  const [monthlyRows, pageRows, total] = await Promise.all([
+  const [monthlyRows, previousRows, pageRows, total] = await Promise.all([
     sumReceiptsByMonth(context, filters),
+    sumReceiptsByMonth(context, { ...filters, ...previousRange(filters.from, filters.to) }),
     listReceipts(context, { ...filters, limit: PAGE_SIZE, offset: pageOffset(page) }),
     countReceipts(context, filters),
   ]);
   if (!pageRows.length && page > lastPage(total)) redirect(pageHref("/app/finance", searchState, "page", lastPage(total)));
   const monthly = new Map(monthlyRows.map((row) => [row.month, cents(row.total)]));
-  const eur = [...monthly.values()].reduce((sum, value) => sum + value, 0n);
+  const eur = sum(monthlyRows);
+  const lastMonth = filters.to.slice(0, 7);
   const chartData: { month: string; EUR: number }[] = [];
-  for (let month = filters.from.slice(0, 7); month <= filters.to.slice(0, 7); month = monthOffset(month, 1)) {
+  for (let month = filters.from.slice(0, 7); month <= lastMonth; month = monthOffset(month, 1)) {
     chartData.push({ month, EUR: Number(monthly.get(month) ?? 0n) / 100 });
   }
   return <>
-    <SummaryCard>{formatCents(eur, "EUR")}</SummaryCard>
-    {/* Always the same three sections as the skeleton: an empty result only replaces the table. */}
-    <ChartCard><FinanceChart data={chartData} /></ChartCard>
-    {total === 0 ? <EmptyState title="Няма получени плащания" description="Няма плащания за избраните филтри." /> : <DataTable
+    <SummaryFrame
+      total={formatCents(eur, "EUR")}
+      delta={<Delta current={eur} previous={sum(previousRows)} />}
+      facts={<>
+        <span>{total} {total === 1 ? "плащане" : "плащания"} за периода</span>
+        <span>{monthName.format(new Date(`${lastMonth}-01T00:00:00Z`))}: {formatCents(monthly.get(lastMonth) ?? 0n, "EUR")}</span>
+      </>}
+      chart={<FinanceChart data={chartData} compact className="h-32" />}
+    />
+    {/* An empty result only replaces the table, so the page keeps the skeleton's shape. */}
+    {total === 0 ? <FinanceEmpty filtered={filtered} from={filters.from} to={filters.to} /> : <DataTable
       label={label}
       columns={columns}
-      rows={pageRows.map((receipt) => ({
-        id: receipt.id,
-        href: `/app/projects/${receipt.projectId}`,
-        cells: [
-          receipt.receivedOn,
-          receipt.projectName,
-          <Badge key="kind" variant="secondary">{receipt.correctionOfId ? "Корекция" : kindOptions.find((item) => item.value === receipt.kind)?.label} · {methodOptions.find((item) => item.value === receipt.method)?.label ?? receipt.method}</Badge>,
-          formatCents(cents(receipt.amount), receipt.currency),
-        ],
-      }))}
-      footer={<ListPagination path="/app/finance" params={searchState} page={page} total={total} />}
+      density="compact"
+      rows={pageRows.map((receipt) => {
+        const MethodIcon = methodIcons[receipt.method] ?? CircleEllipsis;
+        return {
+          id: receipt.id,
+          href: `/app/projects/${receipt.projectId}`,
+          cells: [
+            formatIsoDate(receipt.receivedOn),
+            <span key="project" className="font-medium">{receipt.projectName}</span>,
+            <Badge key="kind" variant={receipt.correctionOfId ? "outline" : "secondary"}>{receipt.correctionOfId ? "Корекция" : kindOptions.find((item) => item.value === receipt.kind)?.label}</Badge>,
+            <span key="method" className="inline-flex items-center gap-1.5 text-muted-foreground"><MethodIcon className="size-3.5" />{methodOptions.find((item) => item.value === receipt.method)?.label ?? receipt.method}</span>,
+            <span key="amount" className="font-medium tabular-nums">{formatCents(cents(receipt.amount), receipt.currency)}</span>,
+          ],
+        };
+      })}
+      footer={<ListPagination path="/app/finance" params={searchState} page={page} total={total} density="compact" />}
     />}
   </>;
 }
 
-export function FinanceFiltersSkeleton() {
-  return <FilterBarSkeleton fields={Object.values(financeFilterFields)} />;
+/** Same controls and widths as `FinanceToolbar`, drawn as placeholders. */
+export function FinanceToolbarSkeleton() {
+  return <div className="flex flex-wrap items-center gap-2">
+    <Skeleton className={cn("h-8 rounded-lg", financeToolbarWidths.period)} />
+    <Skeleton className={cn("h-8 rounded-lg", financeToolbarWidths.project)} />
+    <Skeleton className={cn("h-8 rounded-lg", financeToolbarWidths.kind)} />
+    <Skeleton className={cn("h-8 rounded-lg", financeToolbarWidths.method)} />
+  </div>;
 }
 
 export function FinanceContentSkeleton() {
   return <>
-    <SummaryCard><Skeleton className="h-6 w-32" /></SummaryCard>
-    {/* Same height as FinanceChart (h-56). */}
-    <ChartCard><Skeleton className="h-56 w-full rounded-lg" /></ChartCard>
-    <DataTableSkeleton label={label} columns={columns} footer={<ListPaginationSkeleton />} />
+    <SummaryFrame
+      total={<Skeleton className="h-6 w-36" />}
+      delta={<Skeleton className="h-3 w-44" />}
+      facts={<><div className="flex h-4 items-center"><Skeleton className="h-3 w-32" /></div><div className="flex h-4 items-center"><Skeleton className="h-3 w-28" /></div></>}
+      chart={<Skeleton className="h-32 w-full rounded-lg" />}
+    />
+    <DataTableSkeleton label={label} columns={columns} density="compact" rows={10} footer={<ListPaginationSkeleton density="compact" />} />
   </>;
 }

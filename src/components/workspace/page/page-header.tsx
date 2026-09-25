@@ -11,13 +11,16 @@ const backClassName = "self-start text-sm text-muted-foreground hover:text-foreg
  * The one header for list, form and dashboard pages. It renders from static copy only,
  * so `loading.tsx` shows the exact same header while the page's data streams in.
  */
-export function PageHeader({ page, back, actions }: {
+export function PageHeader({ page, back, actions, variant = "default" }: {
   page: WorkspacePage;
   /** Omit `href` in loading states, where the real target is not known yet. */
   back?: { href?: string; label: string };
   actions?: ReactNode;
+  /** `hidden`: the top bar's breadcrumb is the visible title; only a screen-reader heading remains. */
+  variant?: "default" | "hidden";
 }) {
   const copy = workspacePageCopy[page];
+  if (variant === "hidden") return <h1 className="sr-only">{copy.title}</h1>;
   const eyebrow = "eyebrow" in copy ? copy.eyebrow : undefined;
   return (
     <div className="flex flex-col gap-4">

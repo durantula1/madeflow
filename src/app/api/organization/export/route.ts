@@ -81,7 +81,7 @@ export async function GET() {
       })),
     })),
   };
-  const filename = `madeflow-company-${exportedAt.toISOString().slice(0, 10)}.json`;
+  const filename = `pakto-company-${exportedAt.toISOString().slice(0, 10)}.json`;
   return new Response(JSON.stringify(body, null, 2), {
     headers: { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": `attachment; filename="${filename}"`, "Cache-Control": "private, no-store" },
   });

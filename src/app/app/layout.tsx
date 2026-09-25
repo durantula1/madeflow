@@ -19,6 +19,7 @@ import { NavLink } from "@/components/workspace/nav-link";
 import { MobileMoreMenu } from "@/components/workspace/mobile-more-menu";
 import { UserMenu } from "@/components/workspace/user-menu";
 import { ActionNotice } from "@/components/workspace/action-notice";
+import { AppBreadcrumb } from "@/components/workspace/app-breadcrumb";
 import { DeletionPendingBanner } from "@/components/settings/account-dialogs";
 import { can, roleLabel } from "@/lib/authz/permissions";
 import { getOptionalTenantContext } from "@/lib/authz/tenant-context";
@@ -86,16 +87,16 @@ export default async function WorkspaceLayout({
         </div>
       </aside>
       <section className="min-w-0 pb-24 lg:pb-0">
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/90 px-4 backdrop-blur sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/90 px-4 backdrop-blur sm:px-6 lg:h-12 lg:px-6">
           <Wordmark href="/app" className="lg:hidden" />
-          <p className="hidden text-sm text-muted-foreground lg:block">
-            {context.organizationName}
-          </p>
+          <div className="hidden min-w-0 lg:block">
+            <AppBreadcrumb organizationName={context.organizationName} />
+          </div>
           <div className="lg:hidden">
             <UserMenu variant="header" {...userMenu} />
           </div>
         </header>
-        <main className="max-w-[1320px] p-4 sm:p-6 lg:p-8">
+        <main className="max-w-content p-4 sm:p-6">
           {pendingDeletion ? <div className="mb-6"><DeletionPendingBanner deleteOn={deletionDateFormat.format(accountDeletionDate(pendingDeletion))} companyName={account?.closureRequested ? context.organizationName : null} /></div> : null}
           {children}
         </main>

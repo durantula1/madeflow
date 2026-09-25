@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { MailPlus } from "lucide-react";
 import { redirect } from "next/navigation";
 
@@ -23,6 +24,8 @@ import { countTeamMembers, getTeamCounters, listPendingOwnerRequests, listPendin
 import { memberColumns, membersLabel, searchLabel } from "./team-sections";
 
 const roles: Record<string, string> = { owner: "Собственик", office: "Офис", field: "Терен", admin: "Администратор" };
+
+export const metadata: Metadata = { title: "Екип" };
 
 export default async function TeamPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; page?: string }> }) {
   const context = await requireTenantContext();

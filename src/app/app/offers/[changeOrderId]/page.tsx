@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { BellRing, Eye, PencilLine, Plus, TimerReset } from "lucide-react";
@@ -16,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/workspace/data-table";
 import { DetailHeader } from "@/components/workspace/detail-header";
+import { EmptyResult } from "@/components/workspace/page/empty-result";
 import { PageShell } from "@/components/workspace/page/page-shell";
 import { StatCard } from "@/components/workspace/stat-card";
 import { ActionForm, ActionSubmit } from "@/components/workspace/action-form";
@@ -29,7 +31,7 @@ import { discountLabel } from "@/modules/change-orders/pricing";
 import { listRevisionAttachments } from "@/modules/change-orders/attachment-data";
 import { documentCode, scheduleLabel, totalLabel, vatLabel } from "@/modules/change-orders/labels";
 import { lastPage, pageHref, pageOffset, parsePage } from "@/lib/pagination";
-import { countChangeOrders, getChangeOrder, listChangeOrders } from "@/modules/change-orders/queries";
+import { countChangeOrders, getChangeOrder, getChangeOrderTitle, listChangeOrders } from "@/modules/change-orders/queries";
 import { getActivePortalLink } from "@/modules/change-portal/links";
 import { maskEmail } from "@/lib/email/send";
 import { loadSignature } from "@/modules/change-portal/signature";
@@ -57,6 +59,11 @@ const eventLabels: Record<string, string> = {
 const CHANGES_PAGE_SIZE = 10;
 
 const formatDate = (value: Date) => new Intl.DateTimeFormat("bg-BG", { dateStyle: "medium", timeStyle: "short" }).format(value);
+
+export async function generateMetadata({ params }: PageProps<"/app/offers/[changeOrderId]">): Promise<Metadata> {
+  const [{ changeOrderId }, context] = await Promise.all([params, requireTenantContext()]);
+  return { title: (await getChangeOrderTitle(context, changeOrderId)) ?? "Оферти" };
+}
 
 export default async function ChangeOrderPage({ params, searchParams }: PageProps<"/app/offers/[changeOrderId]">) {
   const [{ changeOrderId }, query, context] = await Promise.all([params, searchParams, requireTenantContext()]);
@@ -194,7 +201,7 @@ export default async function ChangeOrderPage({ params, searchParams }: PageProp
                 ],
               }))}
               footer={<ListPagination path={path} params={{ eventsBefore: eventsBefore !== undefined ? String(eventsBefore) : undefined }} page={changesPage} total={offerChangesTotal} pageSize={CHANGES_PAGE_SIZE} pageParam="changesPage" />}
-            /> : <p className="py-6 text-center text-sm text-muted-foreground">{change.revisionStatus === "approved" ? "Още няма промени по тази оферта." : "Промяна се добавя след одобрение на офертата."}</p>}
+            /> : <EmptyResult title={change.revisionStatus === "approved" ? "Още няма промени по тази оферта." : "Промяна се добавя след одобрение на офертата."} />}
           </CardContent>
         </Card>
       ) : null}
@@ -203,8 +210,8 @@ export default async function ChangeOrderPage({ params, searchParams }: PageProp
         <TabsList>
           <TabsTrigger id="preview">{documentTabLabels.preview}</TabsTrigger>
           {canEdit ? <TabsTrigger id="edit">{documentTabLabels.edit}</TabsTrigger> : null}
-          {showThread ? <TabsTrigger id="messages">Разговор{thread.length ? <span className={`ml-1 rounded-full px-1.5 text-[11px] ${unreadMessages ? "bg-primary text-primary-foreground" : "bg-sidebar-accent"}`}>{unreadMessages || thread.length}</span> : null}</TabsTrigger> : null}
-          {canNotes ? <TabsTrigger id="notes">Бележки{notes.length ? <span className="ml-1 rounded-full bg-sidebar-accent px-1.5 text-[11px]">{notes.length}</span> : null}</TabsTrigger> : null}
+          {showThread ? <TabsTrigger id="messages">Разговор{thread.length ? <span className={`ml-1 rounded-full px-1.5 text-2xs ${unreadMessages ? "bg-primary text-primary-foreground" : "bg-sidebar-accent"}`}>{unreadMessages || thread.length}</span> : null}</TabsTrigger> : null}
+          {canNotes ? <TabsTrigger id="notes">Бележки{notes.length ? <span className="ml-1 rounded-full bg-sidebar-accent px-1.5 text-2xs">{notes.length}</span> : null}</TabsTrigger> : null}
           <TabsTrigger id="history">{documentTabLabels.history}</TabsTrigger>
         </TabsList>
         <TabsContent id="preview" className="flex flex-col gap-5 pt-5">
@@ -247,14 +254,14 @@ export default async function ChangeOrderPage({ params, searchParams }: PageProp
           <Card>
             <CardHeader><CardTitle>Версии</CardTitle></CardHeader>
             <CardContent className="flex flex-col gap-2">
-              {change.revisions.filter((revision) => revision.frozenAt).length ? change.revisions.filter((revision) => revision.frozenAt).map((revision) => <a key={revision.id} href={`/api/changes/${change.id}/pdf?revision=${revision.id}`} className="text-sm text-primary underline">Версия {revision.revisionNumber} · {revision.status} · PDF</a>) : <p className="text-sm text-muted-foreground">Още няма замразена версия.</p>}
+              {change.revisions.filter((revision) => revision.frozenAt).length ? change.revisions.filter((revision) => revision.frozenAt).map((revision) => <a key={revision.id} href={`/api/changes/${change.id}/pdf?revision=${revision.id}`} className="text-sm text-primary underline">Версия {revision.revisionNumber} · {revision.status} · PDF</a>) : <EmptyResult title="Още няма замразена версия." />}
             </CardContent>
           </Card>
           <Card>
             <CardHeader><CardTitle>Събития</CardTitle></CardHeader>
             <CardContent className="flex flex-col gap-4">
               {latestEventsHref ? <Link href={latestEventsHref} className="text-sm font-medium text-primary underline">Към най-новите събития</Link> : null}
-              {!change.events.length ? <p className="text-sm text-muted-foreground">Няма събития.</p> : null}
+              {!change.events.length ? <EmptyResult title="Няма събития." /> : null}
               {change.events.map((event) => <div key={event.id}><p className="text-sm font-medium">{eventLabels[event.eventType] ?? event.eventType}</p><p className="text-xs text-muted-foreground">{new Intl.DateTimeFormat("bg-BG", { dateStyle: "medium", timeStyle: "short" }).format(event.createdAt)}</p></div>)}
               {olderEventsHref ? <Link href={olderEventsHref} className="text-sm font-medium text-primary underline">По-стари събития</Link> : null}
             </CardContent>

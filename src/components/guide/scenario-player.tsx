@@ -187,9 +187,9 @@ export function ScenarioPlayer() {
                       <Icon className="size-4" />
                     </span>
                     <span className="min-w-0">
-                      <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden"><LaneIcon className="size-3" />{laneMeta[item.lane].label}</span>
+                      <span className="flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground sm:hidden"><LaneIcon className="size-3" />{laneMeta[item.lane].label}</span>
                       <span className="block font-semibold leading-snug">{item.title}</span>
-                      {item.status ? <span className="mt-1 inline-block rounded-full bg-sidebar px-2 py-0.5 text-[11px] font-semibold text-sidebar-foreground">{item.status}</span> : null}
+                      {item.status ? <span className="mt-1 inline-block rounded-full bg-sidebar px-2 py-0.5 text-2xs font-semibold text-sidebar-foreground">{item.status}</span> : null}
                     </span>
                     {active ? (
                       <motion.span

@@ -8,7 +8,7 @@ const serverEnvironmentSchema = z.object({
   SUPABASE_SECRET_KEY: z.string().min(1).optional(),
   CRON_SECRET: z.string().min(16).optional(),
   RESEND_API_KEY: z.string().min(1).optional(),
-  EMAIL_FROM: z.string().min(1).default("MadeFlow <notifications@example.com>"),
+  EMAIL_FROM: z.string().min(1).default("Pakto <notifications@example.com>"),
 });
 
 export type ServerEnvironment = z.infer<typeof serverEnvironmentSchema>;

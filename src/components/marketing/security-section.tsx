@@ -139,7 +139,7 @@ export function SecuritySection() {
             </h2>
             <p className="mt-8 max-w-xl text-base leading-7 text-[#c6d9da]">
               Когато има спор, думата на едната страна срещу другата не стига.
-              MadeFlow пази кой, кога и какво точно е одобрил, така че записът
+              Pakto пази кой, кога и какво точно е одобрил, така че записът
               да издържи и след месеци.
             </p>
             <div className="mt-8 flex flex-wrap gap-x-5 gap-y-3 text-xs font-bold">

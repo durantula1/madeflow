@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { PermissionMatrix } from "@/components/team/permission-matrix";
@@ -14,6 +15,13 @@ import { requireOwner } from "@/lib/authz/project-access";
 import { requireTenantContext } from "@/lib/authz/tenant-context";
 import { disableTeamMemberAction, requestOwnerChangeAction } from "@/modules/team/actions";
 import { getTeamMember } from "@/modules/team/queries";
+
+export async function generateMetadata({ params }: PageProps<"/app/team/[userId]">): Promise<Metadata> {
+  const [{ userId }, context] = await Promise.all([params, requireTenantContext()]);
+  // The page is owner-only, so nobody else learns a colleague's name from the tab.
+  const member = context.role === "owner" ? await getTeamMember(context.organizationId, userId) : null;
+  return { title: member?.displayName ?? member?.email ?? "Екип" };
+}
 
 export default async function TeamMemberPage({ params }: PageProps<"/app/team/[userId]">) {
   const [{ userId }, context] = await Promise.all([params, requireTenantContext()]);

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { MessageState } from "@/modules/messages/actions";
 import { cn } from "@/lib/utils";
+import { EmptyResult } from "@/components/workspace/page/empty-result";
 
 type Message = { id: number; authorType: "staff" | "portal_contact"; authorName: string; body: string; createdAt: Date };
 
@@ -48,10 +49,10 @@ export function MessageThread({ side, messages, action, hidden, placeholder, emp
           return (
             <div key={message.id} className={cn("flex max-w-[85%] flex-col gap-1", mine ? "self-end items-end" : "self-start items-start")}>
               <p className={cn("whitespace-pre-line break-words rounded-2xl px-3.5 py-2.5 text-sm", mine ? "rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md bg-muted")}>{message.body}</p>
-              <p className="px-1 text-[11px] text-muted-foreground">{mine && side === "portal_contact" ? "Ти" : message.authorName} · {dateTime.format(message.createdAt)}</p>
+              <p className="px-1 text-2xs text-muted-foreground">{mine && side === "portal_contact" ? "Ти" : message.authorName} · {dateTime.format(message.createdAt)}</p>
             </div>
           );
-        }) : <p className="m-auto max-w-xs text-center text-sm text-muted-foreground">{emptyText}</p>}
+        }) : <EmptyResult className="m-auto" title={emptyText} />}
         <div ref={endRef} />
       </div>
       <form ref={formRef} action={send} className={cn("flex items-end gap-2 rounded-b-2xl border-t bg-card/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur", composerClassName)}>

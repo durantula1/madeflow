@@ -1,7 +1,7 @@
 {
-  "name": "MadeFlow",
-  "short_name": "MadeFlow",
-  "description": "Паспорт на поръчката — от спецификация до сервиз.",
+  "name": "Pakto",
+  "short_name": "Pakto",
+  "description": "Допълнителната работа, договорена навреме.",
   "start_url": "/app",
   "display": "standalone",
   "background_color": "#f4efe4",
@@ -9,7 +9,7 @@
   "lang": "bg",
   "icons": [
     {
-      "src": "/madeflow-mark.svg",
+      "src": "/pakto-mark.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"

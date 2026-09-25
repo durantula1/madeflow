@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { DeleteAccountDialog, ExportDataLink, LeaveOrganizationDialog } from "@/components/settings/account-dialogs";
@@ -9,6 +10,8 @@ import { acceptLegalDocumentsAction } from "@/modules/account/actions";
 import { getAccountDeletionPlan, getLeaveBlocker, listUserConsents } from "@/modules/account/queries";
 
 const dateFormat = new Intl.DateTimeFormat("bg-BG", { dateStyle: "long", timeZone: "Europe/Sofia" });
+
+export const metadata: Metadata = { title: "Данни и поверителност · Настройки" };
 
 export default async function PrivacySettingsPage() {
   const context = await requireTenantContext();
@@ -23,7 +26,7 @@ export default async function PrivacySettingsPage() {
   }));
 
   return <>
-    <SettingsSection title="Моите данни" description="Изтегли всичко, което MadeFlow пази за теб като потребител: профил, членства, достъп до обекти, известия и действия.">
+    <SettingsSection title="Моите данни" description="Изтегли всичко, което Pakto пази за теб като потребител: профил, членства, достъп до обекти, известия и действия.">
       <ExportDataLink />
       <p className="mt-3 text-xs text-muted-foreground">
         Обектите, клиентите и документите принадлежат на фирмата. Цялостен експорт прави собственикът.

@@ -88,9 +88,9 @@ async function sendInviteEmail(input: { to: string; link: string; organizationNa
   const until = input.expiresAt.toLocaleDateString("bg-BG", { timeZone: "Europe/Sofia" });
   await sendEmail({
     to: input.to,
-    subject: `${input.organizationName} те кани в MadeFlow`,
-    text: `Здравей!\n\n${who} те кани в екипа в MadeFlow като „${input.roleLabel}“.\n\nПриеми поканата: ${input.link}\n\nЛинкът е валиден до ${until} и работи само с профил на ${input.to}.`,
-    html: `<div style="font-family:system-ui,sans-serif;max-width:520px;color:#102b38"><p>Здравей!</p><p>${escapeHtml(who)} те кани в екипа в MadeFlow като <strong>${escapeHtml(input.roleLabel)}</strong>.</p><p><a href="${input.link}" style="display:inline-block;padding:12px 20px;border-radius:10px;background:#ff765f;color:#102b38;text-decoration:none;font-weight:600">Приеми поканата</a></p><p style="color:#5b6b70;font-size:14px">Линкът е валиден до ${until} и работи само с профил на ${escapeHtml(input.to)}. Ако не очакваш тази покана, игнорирай имейла.</p></div>`,
+    subject: `${input.organizationName} те кани в Pakto`,
+    text: `Здравей!\n\n${who} те кани в екипа в Pakto като „${input.roleLabel}“.\n\nПриеми поканата: ${input.link}\n\nЛинкът е валиден до ${until} и работи само с профил на ${input.to}.`,
+    html: `<div style="font-family:system-ui,sans-serif;max-width:520px;color:#102b38"><p>Здравей!</p><p>${escapeHtml(who)} те кани в екипа в Pakto като <strong>${escapeHtml(input.roleLabel)}</strong>.</p><p><a href="${input.link}" style="display:inline-block;padding:12px 20px;border-radius:10px;background:#ff765f;color:#102b38;text-decoration:none;font-weight:600">Приеми поканата</a></p><p style="color:#5b6b70;font-size:14px">Линкът е валиден до ${until} и работи само с профил на ${escapeHtml(input.to)}. Ако не очакваш тази покана, игнорирай имейла.</p></div>`,
   });
 }
 

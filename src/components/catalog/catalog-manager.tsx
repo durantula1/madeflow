@@ -6,8 +6,10 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import { EmptyResult } from "@/components/workspace/page/empty-result";
 import { archiveCatalogItemAction, importCatalogAction, saveCatalogItemAction, type CatalogState } from "@/modules/catalog/actions";
 import type { CatalogPick } from "@/components/catalog/catalog-picker";
 
@@ -46,10 +48,11 @@ export function CatalogManager({ items, canEdit, currency = "EUR" }: { items: Ca
       </div>
 
       {!items.length ? (
-        <div className="rounded-2xl border border-dashed bg-card p-8 text-center">
-          <p className="font-semibold">Каталогът е празен</p>
-          <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Добави услугите и материалите, които ползваш най-често, с мярка и цена. После ги избираш в офертата с едно докосване, вместо да ги пишеш всеки път.</p>
-        </div>
+        <EmptyResult
+          className="rounded-2xl border border-dashed bg-card"
+          title="Каталогът е празен"
+          description="Добави услугите и материалите, които ползваш най-често, с мярка и цена. После ги избираш в офертата с едно докосване, вместо да ги пишеш всеки път."
+        />
       ) : (
         <ul className="grid gap-2 md:grid-cols-2">
           {filtered.map((item) => (
@@ -66,11 +69,37 @@ export function CatalogManager({ items, canEdit, currency = "EUR" }: { items: Ca
               ) : null}
             </li>
           ))}
-          {!filtered.length ? <li className="p-6 text-center text-sm text-muted-foreground md:col-span-2">Нищо не съвпада с „{query}“.</li> : null}
+          {!filtered.length ? <li className="md:col-span-2"><EmptyResult title={`Нищо не съвпада с „${query}“.`} /></li> : null}
         </ul>
       )}
 
       {editing ? <ItemSheet item={editing === "new" ? null : editing} onClose={() => setEditing(null)} currency={currency} /> : null}
+    </div>
+  );
+}
+
+/** Same search row and item cards as `CatalogManager`, drawn as placeholders for `loading.tsx`. */
+export function CatalogManagerSkeleton({ rows = 6 }: { rows?: number }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Skeleton className="h-11 flex-1 rounded-lg" />
+        <div className="grid grid-cols-2 gap-2 sm:flex">
+          <Skeleton className="h-11 rounded-lg sm:w-28" />
+          <Skeleton className="h-11 rounded-lg sm:w-36" />
+        </div>
+      </div>
+      <ul className="grid gap-2 md:grid-cols-2">
+        {Array.from({ length: rows }, (_, index) => (
+          <li key={index} className="flex items-center justify-between gap-3 rounded-xl border bg-card p-3">
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <div className="flex h-6 items-center"><Skeleton className="h-4 w-48 max-w-full" /></div>
+              <div className="flex h-5 items-center"><Skeleton className="h-3.5 w-32 max-w-full" /></div>
+            </div>
+            <div className="flex shrink-0 gap-1"><Skeleton className="size-10 rounded-lg" /><Skeleton className="size-10 rounded-lg" /></div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

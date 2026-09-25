@@ -1,9 +1,12 @@
+import type { Metadata } from "next";
 import { SignOutEverywhereDialog } from "@/components/settings/account-dialogs";
 import { SettingsSection } from "@/components/settings/settings-section";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { ActionForm, ActionSubmit } from "@/components/workspace/action-form";
 import { changePasswordAction } from "@/modules/account/actions";
+
+export const metadata: Metadata = { title: "Сигурност · Настройки" };
 
 export default function SecuritySettingsPage() {
   return <>

@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import { SettingsSection } from "@/components/settings/settings-section";
 import { ActionForm, ActionSubmit } from "@/components/workspace/action-form";
 import { requireTenantContext } from "@/lib/authz/tenant-context";
 import { updateNotificationPreferencesAction } from "@/modules/notifications/preference-actions";
 import { getEmailPreferences } from "@/modules/notifications/preferences";
+
+export const metadata: Metadata = { title: "Известия · Настройки" };
 
 export default async function NotificationSettingsPage() {
   const context = await requireTenantContext();

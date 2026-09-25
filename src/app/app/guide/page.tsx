@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { EyeOff, Eye, FileLock2, KeyRound, Signature, Smartphone } from "lucide-react";
 
 import { DocumentStatusBadge } from "@/components/change-orders/document-status-badge";
@@ -27,6 +28,8 @@ const visibility = [
   { who: "Клиентът вижда", icon: KeyRound, items: ["Само изпратените версии", "Какво се е променило спрямо предишната", "До кога е валидна офертата", "PDF и разписка за всяко свое решение"] },
   { who: "Клиентът никога не вижда", icon: EyeOff, items: ["Черновите ти", "Вътрешните бележки", "Кой от екипа какво е правил"] },
 ];
+
+export const metadata: Metadata = { title: "Как работи" };
 
 export default function GuidePage() {
   return (

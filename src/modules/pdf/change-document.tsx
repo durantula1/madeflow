@@ -78,11 +78,11 @@ export function ChangePdfDocument({ organization, project, siteAddress, contact,
     ? lines
     : [{ description: revision.title, quantity: "1", unit: "усл.", unitPrice: revision.subtotal, lineTotal: revision.subtotal }];
 
-  return <Document title={`${code} · ${revision.title}`} author={organization} creator="MadeFlow"><Page size="A4" style={styles.page}>
+  return <Document title={`${code} · ${revision.title}`} author={organization} creator="Pakto"><Page size="A4" style={styles.page}>
     <View style={styles.header}>
       <View>
         <Text style={styles.organization}>{organization}</Text>
-        <Text style={{ color: muted, fontSize: 9 }}>Документ, създаден с MadeFlow</Text>
+        <Text style={{ color: muted, fontSize: 9 }}>Документ, създаден с Pakto</Text>
       </View>
       <View>
         <Text style={[styles.kind, { textAlign: "right" }]}>{noun} · версия {revision.revisionNumber}</Text>

@@ -2,7 +2,7 @@
 
 Приложението няма да е на Vercel, а на собствен VPS в Hostinger. Тук записваме **всичко, което трябва да се настрои**, за да не се забрави при миграцията. Файлът се допълва при всяка нова функция.
 
-> Статус: още не е мигрирано. Засега работи локално, с базата в Supabase (проект `MadeFlow`, ref `mzmvtxjmdqucrfuajimd`, регион eu-central-1).
+> Статус: още не е мигрирано. Засега работи локално, с базата в Supabase (проектът все още се казва `MadeFlow`, ref `mzmvtxjmdqucrfuajimd`, регион eu-central-1).
 
 ---
 
@@ -12,7 +12,7 @@
 
 | Променлива | Задължителна | Какво е | Бележки |
 |---|---|---|---|
-| `NEXT_PUBLIC_APP_URL` | да | Публичният адрес, напр. `https://app.madeflow.bg` | Влиза в линковете към клиента, в имейлите и в auth пренасочванията. **Задава се при build**, защото е `NEXT_PUBLIC_`. |
+| `NEXT_PUBLIC_APP_URL` | да | Публичният адрес, напр. `https://app.pakto.bg` | Влиза в линковете към клиента, в имейлите и в auth пренасочванията. **Задава се при build**, защото е `NEXT_PUBLIC_`. |
 | `NEXT_PUBLIC_SUPABASE_URL` | да | `https://mzmvtxjmdqucrfuajimd.supabase.co` | Задава се при build. |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | да | Publishable ключ от Supabase → Settings → API | Задава се при build. |
 | `DATABASE_URL` | да | Postgres connection string (pooler, transaction mode) | Сървърният код чете и пише само оттук. |
@@ -21,7 +21,7 @@
 | `PORTAL_LINK_SECRET` | **да, задай го изрично** | Дълъг случаен низ (`openssl rand -hex 32`) | Ако липсва, кодът взима `SUPABASE_SECRET_KEY`, а ако и той липсва, `DATABASE_URL`. **Смяна на стойността обезсилва всички клиентски линкове.** Първо провери каква стойност ползва сегашната среда и я запази. |
 | `CRON_SECRET` | да | Случаен низ, поне 16 знака | Cron задачите го пращат като `Authorization: Bearer …`. |
 | `RESEND_API_KEY` | да | Ключ от resend.com | Без него не тръгват имейли: линкове, кодове, разписки, напомняния. |
-| `EMAIL_FROM` | да | напр. `MadeFlow <notifications@madeflow.bg>` | Домейнът трябва да е потвърден в Resend (DNS записи SPF/DKIM). |
+| `EMAIL_FROM` | да | напр. `Pakto <notifications@pakto.bg>` | Домейнът трябва да е потвърден в Resend (DNS записи SPF/DKIM). |
 | `NODE_ENV` | да | `production` | |
 
 ---
@@ -32,10 +32,10 @@
 
 ```cron
 # Изтриване на профили след гратисния период: всеки ден в 03:00
-0 3 * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://app.madeflow.bg/api/cron/purge-accounts > /dev/null
+0 3 * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://app.pakto.bg/api/cron/purge-accounts > /dev/null
 
 # Напомняния и изтичане на оферти: всеки ден в 07:00 (Europe/Sofia)
-0 7 * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://app.madeflow.bg/api/cron/offer-reminders > /dev/null
+0 7 * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://app.pakto.bg/api/cron/offer-reminders > /dev/null
 ```
 
 - Провери часовата зона на сървъра (`timedatectl`). Горните часове предполагат `Europe/Sofia`. Ако сървърът е на UTC, извади 2–3 часа.
@@ -64,7 +64,7 @@
 ```bash
 pnpm install --frozen-lockfile
 pnpm build          # next build --webpack; NEXT_PUBLIC_* трябва да са зададени ТУК
-pnpm start          # или през PM2: pm2 start "pnpm start" --name madeflow
+pnpm start          # или през PM2: pm2 start "pnpm start" --name pakto
 ```
 
 - Node версия: същата като локално (провери с `node -v`) или LTS ≥ 20.

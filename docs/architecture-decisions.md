@@ -1,10 +1,10 @@
-# MadeFlow architecture decisions
+# Pakto architecture decisions
 
 Status: accepted for demo implementation, 2026-09-22.
 
 ## Product boundary
 
-- MadeFlow решава един проблем: навременно документиране и одобряване на
+- Pakto решава един проблем: навременно документиране и одобряване на
   допълнителна работа.
 - България е първият пазар; един designated approver е достатъчен за демото.
 - Одобрението е click approval с typed name и audit trail, без претенция за QES.
@@ -38,5 +38,5 @@ Status: accepted for demo implementation, 2026-09-22.
 
 ## Transitional boundary
 
-Legacy MadeFlow таблиците и routes са запазени временно за миграция и rollback.
-Новата навигация и продуктови потоци използват само MadeFlow модулите.
+Legacy passport таблиците (от предишния продукт MadeFlow) и routes са запазени временно за миграция и rollback.
+Новата навигация и продуктови потоци използват само модулите на Pakto.

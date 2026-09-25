@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { ListFilters } from "@/components/workspace/list-filters";
@@ -8,6 +9,8 @@ import { can } from "@/lib/authz/permissions";
 import { requireTenantContext } from "@/lib/authz/tenant-context";
 import { parsePage } from "@/lib/pagination";
 import { ProjectsTable, ProjectsTableSkeleton } from "./projects-table";
+
+export const metadata: Metadata = { title: "Обекти" };
 
 export default async function ProjectsPage({ searchParams }: PageProps<"/app/projects">) {
   const [context, params] = await Promise.all([requireTenantContext(), searchParams]);

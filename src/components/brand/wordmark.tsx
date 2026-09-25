@@ -14,7 +14,7 @@ export function Wordmark({
   const content = (
     <>
       <Image
-        src="/madeflow-mark.svg"
+        src="/pakto-mark.svg"
         alt=""
         width={36}
         height={36}
@@ -23,14 +23,11 @@ export function Wordmark({
       />
       <span
         className={cn(
-          "text-[19px] font-extrabold tracking-[-0.05em]",
+          "text-[1.1875rem] font-extrabold tracking-[-0.05em]",
           inverse ? "text-[#fffaf0]" : "text-[#102b38]",
         )}
       >
-        Made
-        <span className={inverse ? "text-[#bceba8]" : "text-[#e86650]"}>
-          Flow
-        </span>
+        Pakto
       </span>
     </>
   );

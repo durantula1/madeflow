@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { eq } from "drizzle-orm";
 
@@ -17,6 +18,8 @@ import { getOfferCopy, getTemplate, listCatalog, listTemplates } from "@/modules
 
 const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
+export const metadata: Metadata = { title: "Нова оферта" };
+
 export default async function NewOfferPage({
   searchParams,
 }: PageProps<"/app/offers/new">) {
@@ -25,7 +28,7 @@ export default async function NewOfferPage({
     requireTenantContext(),
   ]);
   const member = await getCurrentMember(context);
-  if (!can(member, "offers.edit")) return <PageShell><PageHeader page="newOffer" back={{ href: "/app/offers", label: "Назад" }} /><EmptyState title="Нямаш право да създаваш оферти." /></PageShell>;
+  if (!can(member, "offers.edit")) return <PageShell><PageHeader page="newOffer" back={{ href: "/app/offers", label: "Назад" }} /><EmptyState illustration={false} title="Нямаш право да създаваш оферти." /></PageShell>;
   const [anyProjects, defaultProject, organization, catalog, templates, template, copy] = await Promise.all([
     hasProjects(context),
     getProjectOption(context, typeof projectId === "string" ? projectId : undefined),

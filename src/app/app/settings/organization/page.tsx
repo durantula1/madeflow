@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { ExportDataLink } from "@/components/settings/account-dialogs";
 import { SettingsSection } from "@/components/settings/settings-section";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -8,6 +9,8 @@ import { requireTenantContext } from "@/lib/authz/tenant-context";
 import { updateDefaultTaxRateAction, updateOfferValidityAction, updateOrganizationAction } from "@/modules/organizations/actions";
 import { VatRateField } from "@/components/change-orders/vat-rate-field";
 import { getOrganizationSettings } from "@/modules/organizations/queries";
+
+export const metadata: Metadata = { title: "Фирма · Настройки" };
 
 export default async function OrganizationSettingsPage() {
   const context = await requireTenantContext();

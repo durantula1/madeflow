@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { ListFilters } from "@/components/workspace/list-filters";
@@ -10,6 +11,8 @@ import { getProjectOption } from "@/modules/projects/queries";
 import { OffersTable, OffersTableSkeleton } from "./offers-table";
 
 const allowedStatus = ["draft", "sent", "viewed", "approved", "declined", "changes_requested"] as const;
+
+export const metadata: Metadata = { title: "Оферти" };
 
 export default async function OffersPage({ searchParams }: PageProps<"/app/offers">) {
   const [context, params] = await Promise.all([requireTenantContext(), searchParams]);

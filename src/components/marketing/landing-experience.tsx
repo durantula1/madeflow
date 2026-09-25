@@ -42,10 +42,10 @@ export function LandingExperience({ signedIn = false }: { signedIn?: boolean }) 
         <Link
           href="/"
           className="group flex items-center gap-2.5"
-          aria-label="MadeFlow"
+          aria-label="Pakto"
         >
           <Image
-            src="/madeflow-mark.svg"
+            src="/pakto-mark.svg"
             alt=""
             width={36}
             height={36}
@@ -53,7 +53,7 @@ export function LandingExperience({ signedIn = false }: { signedIn?: boolean }) 
             className="size-9 transition-transform group-hover:-rotate-6"
           />
           <span className="text-[15px] font-black tracking-[-0.04em]">
-            MadeFlow<sup className="ml-0.5 text-[6px]">®</sup>
+            Pakto
           </span>
         </Link>
         <nav
@@ -212,10 +212,10 @@ export function LandingExperience({ signedIn = false }: { signedIn?: boolean }) 
 
       <footer className="flex flex-col gap-5 bg-[#102b38] px-[6vw] py-8 text-[#d9e7e4] sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2 text-sm font-black">
-          <span className="size-2 rounded-full bg-[#ff765f]" /> MadeFlow
+          <span className="size-2 rounded-full bg-[#ff765f]" /> Pakto
         </div>
         <div className="flex flex-wrap gap-x-8 gap-y-2 font-mono text-[8px] tracking-[0.14em] text-[#9db5b6]">
-          <span>© 2026 MADEFLOW</span>
+          <span>© 2026 PAKTO</span>
           <span>СОФИЯ · БЪЛГАРИЯ</span>
           {Object.values(LEGAL_DOCUMENTS).map((document) => (
             <Link

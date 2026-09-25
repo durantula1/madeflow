@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { ArrowRight, Clock3 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyResult } from "@/components/workspace/page/empty-result";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ListPagination } from "@/components/workspace/list-filters";
 import { lastPage, pageHref, parsePage } from "@/lib/pagination";
@@ -102,7 +103,7 @@ export default async function PortalProjectPage({
               {data.decidedTotal > data.pageSize ? <div className="overflow-hidden rounded-2xl border bg-card [&>nav]:border-t-0"><ListPagination path={path} params={{ tab: "documents" }} page={page} total={data.decidedTotal} pageSize={data.pageSize} /></div> : null}
             </>
           ) : (
-            <p className="rounded-2xl border bg-card p-6 text-center text-sm text-muted-foreground">Още няма документи за преглед.</p>
+            <EmptyResult className="rounded-2xl border bg-card" title="Още няма документи за преглед." />
           )}
         </TabsContent>
         <TabsContent id="schedule" className="pt-3">

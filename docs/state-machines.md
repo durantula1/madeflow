@@ -1,4 +1,4 @@
-# MadeFlow state machines
+# Pakto state machines
 
 ## Order stage
 

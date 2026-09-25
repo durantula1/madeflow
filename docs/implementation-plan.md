@@ -1,4 +1,4 @@
-# MadeFlow pilot: implementation and acceptance
+# Pakto pilot: implementation and acceptance
 
 The pilot implements one project contract from an approved base offer and approved changes. Draft, pending, and rejected revisions do not change the contract total or deadline. Sent revisions are frozen in PostgreSQL and available as PDFs; client decisions remain in the timeline.
 

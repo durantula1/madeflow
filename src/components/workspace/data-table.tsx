@@ -17,7 +17,16 @@ export type DataTableColumn = {
   mobile?: "primary";
 };
 
-const cellClassName = "px-4 py-3 align-middle";
+export type DataTableDensity = "default" | "compact";
+
+const cellClassNames: Record<DataTableDensity, string> = {
+  default: "px-4 py-3 align-middle",
+  compact: "px-3 py-2 align-middle",
+};
+const headClassNames: Record<DataTableDensity, string> = {
+  default: "h-10 px-4 font-medium text-foreground",
+  compact: "h-9 px-3 text-xs font-medium text-muted-foreground",
+};
 
 /**
  * Below `sm` every row becomes a card: the `stack` column (the row's title) spans the card
@@ -32,9 +41,10 @@ function mobileCell(column?: DataTableColumn) {
   return column?.mobile === "primary" || column?.skeleton === "stack" || !column?.header ? mobilePrimaryCellClassName : mobileCellClassName;
 }
 
-function TableFrame({ label, columns, className, footer, children }: {
+function TableFrame({ label, columns, density, className, footer, children }: {
   label: string;
   columns: DataTableColumn[];
+  density: DataTableDensity;
   className?: string;
   footer?: ReactNode;
   children: ReactNode;
@@ -46,7 +56,7 @@ function TableFrame({ label, columns, className, footer, children }: {
           <thead className="max-sm:hidden">
             <tr className="border-b">
               {columns.map((column) => (
-                <th key={column.id} className={cn("h-10 px-4 text-left align-middle font-medium whitespace-nowrap text-foreground", column.className)}>
+                <th key={column.id} className={cn("text-left align-middle whitespace-nowrap", headClassNames[density], column.className)}>
                   {column.header}
                 </th>
               ))}
@@ -64,21 +74,23 @@ export function DataTable({
   label,
   columns,
   rows,
+  density = "default",
   className,
   footer,
 }: {
   label: string;
   columns: DataTableColumn[];
   rows: { id: string; href?: string; cells: ReactNode[] }[];
+  density?: DataTableDensity;
   className?: string;
   footer?: ReactNode;
 }) {
   return (
-    <TableFrame label={label} columns={columns} className={className} footer={footer}>
+    <TableFrame label={label} columns={columns} density={density} className={className} footer={footer}>
       {rows.map((row) => (
         <DataTableRow key={row.id} href={row.href}>
           {row.cells.map((cell, index) => (
-            <td key={columns[index]?.id ?? index} data-label={columns[index]?.header} className={cn(cellClassName, columns[index]?.className, mobileCell(columns[index]))}>
+            <td key={columns[index]?.id ?? index} data-label={columns[index]?.header} className={cn(cellClassNames[density], columns[index]?.className, mobileCell(columns[index]))}>
               {cell}
             </td>
           ))}
@@ -153,21 +165,23 @@ export function DataTableSkeleton({
   label,
   columns,
   rows = 5,
+  density = "default",
   className,
   footer,
 }: {
   label: string;
   columns: DataTableColumn[];
   rows?: number;
+  density?: DataTableDensity;
   className?: string;
   footer?: ReactNode;
 }) {
   return (
-    <TableFrame label={label} columns={columns} className={cn(tableSlotClassName, className)} footer={footer}>
+    <TableFrame label={label} columns={columns} density={density} className={cn(tableSlotClassName, className)} footer={footer}>
       {Array.from({ length: rows }, (_, index) => (
         <tr key={index} className={cn("border-b last:border-0", mobileRowClassName)}>
           {columns.map((column) => (
-            <td key={column.id} data-label={column.header} className={cn(cellClassName, column.className, mobileCell(column))}>
+            <td key={column.id} data-label={column.header} className={cn(cellClassNames[density], column.className, mobileCell(column))}>
               <SkeletonCell column={column} />
             </td>
           ))}

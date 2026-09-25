@@ -44,7 +44,7 @@ export function StagedAttachments({ files, onChange, className }: {
               ) : (
                 <span className="grid aspect-square place-items-center"><FileText className="size-8 text-muted-foreground" /></span>
               )}
-              <span className="block truncate px-2 py-1.5 text-[11px] text-muted-foreground">{formatFileSize(file.size)}</span>
+              <span className="block truncate px-2 py-1.5 text-2xs text-muted-foreground">{formatFileSize(file.size)}</span>
               <Button
                 type="button"
                 size="icon-xs"

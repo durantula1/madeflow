@@ -270,3 +270,20 @@ export async function getChangeOrder(
   const events = eventRows.slice(0, TIMELINE_PAGE_SIZE);
   return { ...change, revisions, events, hasOlderEvents, disputeEvent, decision, lineItems, baselineOffer };
 }
+
+/** Tab title for an offer or change page, under the same project and draft visibility as the page itself. */
+export async function getChangeOrderTitle(context: TenantContext, changeOrderId: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(changeOrderId)) return null;
+  const db = getDatabase();
+  const [change] = await db.select({ title: changeOrderRevisions.title })
+    .from(changeOrders)
+    .innerJoin(changeOrderRevisions, eq(changeOrderRevisions.id, changeOrders.currentRevisionId))
+    .where(and(
+      eq(changeOrders.organizationId, context.organizationId),
+      eq(changeOrders.id, changeOrderId),
+      seesAllProjects(context) ? undefined : exists(db.select({ id: projectMembers.projectId }).from(projectMembers).where(and(eq(projectMembers.projectId, changeOrders.projectId), eq(projectMembers.userId, context.userId)))),
+      !can(context, "drafts.view_all") ? or(isNotNull(changeOrderRevisions.frozenAt), eq(changeOrderRevisions.createdBy, context.userId)) : undefined,
+    ))
+    .limit(1);
+  return change?.title ?? null;
+}

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { QuickChangeForm } from "@/components/change-orders/quick-change-form";
 import { PageHeader } from "@/components/workspace/page/page-header";
@@ -8,6 +9,8 @@ import { requireTenantContext } from "@/lib/authz/tenant-context";
 import { listApprovedOffers } from "@/modules/change-orders/queries";
 import { getProjectOption, hasProjects } from "@/modules/projects/queries";
 import { eq } from "drizzle-orm";
+
+export const metadata: Metadata = { title: "Нова промяна" };
 
 export default async function NewChangePage({
   searchParams,

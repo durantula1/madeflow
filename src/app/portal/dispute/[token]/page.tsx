@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { getDisputeTarget, parseDisputeToken } from "@/modules/change-portal/dispute";
 
 export const metadata: Metadata = {
-  title: "Оспорване на решение · MadeFlow",
+  title: "Оспорване на решение · Pakto",
   robots: { index: false, follow: false },
   referrer: "no-referrer",
 };

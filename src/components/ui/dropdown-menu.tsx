@@ -199,7 +199,7 @@ function DropdownMenuSubContent({
   return (
     <DropdownMenu
       data-slot="dropdown-menu-sub-content"
-      className={cn("w-auto min-w-[96px] rounded-lg bg-popover p-1 text-popover-foreground shadow-lg ring-1 ring-foreground/10 duration-100", className )}
+      className={cn("w-auto min-w-24 rounded-lg bg-popover p-1 text-popover-foreground shadow-lg ring-1 ring-foreground/10 duration-100", className )}
       placement={placement}
       crossOffset={crossOffset}
       offset={offset}

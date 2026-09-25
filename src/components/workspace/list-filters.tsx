@@ -80,16 +80,34 @@ export function ListFiltersSkeleton({ projectFilter, label = "Търси", class
   ]} />;
 }
 
-const paginationClassName = "flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm";
+type PaginationDensity = "default" | "compact";
 
-export function ListPaginationSkeleton() {
-  return <div className={paginationClassName}>
-    <div className="flex h-5 items-center"><Skeleton className="h-3.5 w-20" /></div>
-    <div className="flex items-center gap-1">{Array.from({ length: 3 }, (_, index) => <Skeleton key={index} className="h-8 w-14 rounded-lg" />)}</div>
+const paginationStyles = {
+  default: {
+    frame: "flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm",
+    step: "inline-flex h-8 items-center rounded-lg border px-2.5",
+    number: "inline-flex size-8 items-center justify-center rounded-lg border",
+    previous: "Назад",
+    next: "Напред",
+  },
+  compact: {
+    frame: "flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2 text-xs",
+    step: "inline-flex h-7 items-center gap-0.5 rounded-lg border px-2",
+    number: "inline-flex size-7 items-center justify-center rounded-lg border tabular-nums",
+    previous: "‹ Предишна",
+    next: "Следваща ›",
+  },
+} satisfies Record<PaginationDensity, Record<string, string>>;
+
+export function ListPaginationSkeleton({ density = "default" }: { density?: PaginationDensity }) {
+  const styles = paginationStyles[density];
+  return <div className={styles.frame}>
+    <div className="flex h-5 items-center"><Skeleton className={density === "compact" ? "h-3 w-32" : "h-3.5 w-20"} /></div>
+    <div className="flex items-center gap-1">{Array.from({ length: 3 }, (_, index) => <Skeleton key={index} className={density === "compact" ? "h-7 w-16 rounded-lg" : "h-8 w-14 rounded-lg"} />)}</div>
   </div>;
 }
 
-export function ListPagination({ path, params, page, total, pageSize = PAGE_SIZE, pageParam = "page" }: {
+export function ListPagination({ path, params, page, total, pageSize = PAGE_SIZE, pageParam = "page", density = "default" }: {
   path: string;
   params: Record<string, string | undefined>;
   page: number;
@@ -97,26 +115,28 @@ export function ListPagination({ path, params, page, total, pageSize = PAGE_SIZE
   pageSize?: number;
   /** Search param holding the page number; set it when one screen has several paginated lists. */
   pageParam?: string;
+  density?: PaginationDensity;
 }) {
   if (total === 0) return null;
+  const styles = paginationStyles[density];
   const pages = lastPage(total, pageSize);
   const current = Math.min(page, pages);
   const from = (current - 1) * pageSize + 1;
   const to = Math.min(current * pageSize, total);
   const href = (target: number) => pageHref(path, params, pageParam, target);
   const numbers = [...new Set([1, pages, current - 1, current, current + 1].filter((item) => item >= 1 && item <= pages))].sort((left, right) => left - right);
-  return <nav aria-label="Страници" className={paginationClassName}>
-    <p className="text-muted-foreground">{from}–{to} от {total}</p>
+  return <nav aria-label="Страници" className={styles.frame}>
+    <p className="text-muted-foreground">{density === "compact" ? "Показани " : null}{from}–{to} от {total}</p>
     <div className="flex items-center gap-1">
-      {current > 1 ? <Link className="inline-flex h-8 items-center rounded-lg border px-2.5 hover:bg-muted" href={href(current - 1)}>Назад</Link> : <span className="inline-flex h-8 items-center rounded-lg border px-2.5 text-muted-foreground">Назад</span>}
+      {current > 1 ? <Link className={cn(styles.step, "hover:bg-muted")} href={href(current - 1)}>{styles.previous}</Link> : <span className={cn(styles.step, "text-muted-foreground")}>{styles.previous}</span>}
       {numbers.map((number, index) => {
         const previous = numbers[index - 1];
         return <span key={number} className="flex items-center gap-1">
           {previous && number - previous > 1 ? <span className="px-1 text-muted-foreground">…</span> : null}
-          <Link href={href(number)} aria-current={number === current ? "page" : undefined} className={`inline-flex size-8 items-center justify-center rounded-lg border ${number === current ? "border-primary bg-primary text-primary-foreground" : "hover:bg-muted"}`}>{number}</Link>
+          <Link href={href(number)} aria-current={number === current ? "page" : undefined} className={cn(styles.number, number === current ? "border-primary bg-primary text-primary-foreground" : "hover:bg-muted")}>{number}</Link>
         </span>;
       })}
-      {current < pages ? <Link className="inline-flex h-8 items-center rounded-lg border px-2.5 hover:bg-muted" href={href(current + 1)}>Напред</Link> : <span className="inline-flex h-8 items-center rounded-lg border px-2.5 text-muted-foreground">Напред</span>}
+      {current < pages ? <Link className={cn(styles.step, "hover:bg-muted")} href={href(current + 1)}>{styles.next}</Link> : <span className={cn(styles.step, "text-muted-foreground")}>{styles.next}</span>}
     </div>
   </nav>;
 }

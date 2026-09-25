@@ -173,8 +173,8 @@ async function sendDeletionScheduledEmail(to: string, deleteOn: Date, companyNam
   const what = companyName ? `Профилът ти и фирмата „${companyName}“ с всички обекти, документи и плащания ще бъдат изтрити` : "Профилът ще бъде изтрит";
   await sendEmail({
     to,
-    subject: "Профилът ти в MadeFlow ще бъде изтрит",
-    text: `Получихме заявка за изтриване на профила ти в MadeFlow.\n\n${what} окончателно на ${date}. Ако не си бил ти или си промени решението, влез до тази дата и натисни „Отмени изтриването“: ${link}`,
-    html: `<div style="font-family:system-ui,sans-serif;max-width:520px;color:#102b38"><p>Получихме заявка за изтриване на профила ти в MadeFlow.</p><p>${escapeHtml(what)} окончателно на <strong>${escapeHtml(date)}</strong>.</p><p style="color:#5b6b70;font-size:14px">Ако не си бил ти или си промени решението, <a href="${link}">влез</a> до тази дата и натисни „Отмени изтриването“.</p></div>`,
+    subject: "Профилът ти в Pakto ще бъде изтрит",
+    text: `Получихме заявка за изтриване на профила ти в Pakto.\n\n${what} окончателно на ${date}. Ако не си бил ти или си промени решението, влез до тази дата и натисни „Отмени изтриването“: ${link}`,
+    html: `<div style="font-family:system-ui,sans-serif;max-width:520px;color:#102b38"><p>Получихме заявка за изтриване на профила ти в Pakto.</p><p>${escapeHtml(what)} окончателно на <strong>${escapeHtml(date)}</strong>.</p><p style="color:#5b6b70;font-size:14px">Ако не си бил ти или си промени решението, <a href="${link}">влез</a> до тази дата и натисни „Отмени изтриването“.</p></div>`,
   });
 }

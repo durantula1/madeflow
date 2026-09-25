@@ -6,6 +6,7 @@ import { BookOpen, Plus, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmptyResult } from "@/components/workspace/page/empty-result";
 import { SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 export type CatalogPick = { id: string; name: string; unit: string | null; unitPrice: string; category: string | null };
@@ -42,11 +43,13 @@ export function CatalogPicker({ items, onPick, currency = "EUR" }: { items: Cata
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           {!items.length ? (
-            <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-              Каталогът е празен. <Link href="/app/catalog" className="font-medium text-primary underline">Добави услуги и материали</Link> или запази ред от офертата с иконата до него.
-            </div>
+            <EmptyResult
+              className="rounded-xl border border-dashed"
+              title="Каталогът е празен"
+              description={<><Link href="/app/catalog" className="font-medium text-primary underline">Добави услуги и материали</Link> или запази ред от офертата с иконата до него.</>}
+            />
           ) : !groups.length ? (
-            <p className="p-6 text-center text-sm text-muted-foreground">Нищо не съвпада с „{query}“.</p>
+            <EmptyResult title={`Нищо не съвпада с „${query}“.`} />
           ) : groups.map(([category, list]) => (
             <section key={category} className="mb-4">
               <p className="sticky top-0 bg-popover py-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">{category}</p>

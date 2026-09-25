@@ -8,7 +8,7 @@ export default async function SettingsLayout({ children }: { children: React.Rea
   return (
     <PageShell>
       <PageHeader page="settings" />
-      <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-10">
+      <div className="grid gap-6 lg:grid-cols-[13.75rem_minmax(0,1fr)] lg:gap-10">
         <SettingsNav owner={context.role === "owner"} />
         <div className="flex min-w-0 max-w-3xl flex-col gap-6">{children}</div>
       </div>

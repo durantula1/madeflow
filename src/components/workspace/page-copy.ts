@@ -6,7 +6,7 @@ export const workspacePageCopy = {
   },
   guide: {
     eyebrow: "Ръководство",
-    title: "Как работи MadeFlow",
+    title: "Как работи Pakto",
     description: "Целият път на една оферта, обяснен без технически думи. Избери сценарий и натисни „Пусни“.",
   },
   dashboard: {
@@ -37,7 +37,7 @@ export const workspacePageCopy = {
   },
   finance: {
     eyebrow: "Финанси",
-    title: "Получени плащания",
+    title: "Плащания",
     description: "Плащанията от клиенти по месеци, обекти и методи.",
   },
   settings: {

@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { addNoteAction, deleteNoteAction, togglePinAction, updateNoteAction, type NoteState } from "@/modules/notes/actions";
 import { documentCode } from "@/modules/change-orders/labels";
 import { cn } from "@/lib/utils";
+import { EmptyResult } from "@/components/workspace/page/empty-result";
 
 type Note = {
   id: string; body: string; pinned: boolean; createdAt: Date; updatedAt: Date;
@@ -61,7 +62,7 @@ export function NotesPanel({ projectId, changeOrderId, notes, legacy = [], curre
           ))}
         </ul>
       ) : (
-        <p className="mt-4 rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">Още няма бележки.</p>
+        <EmptyResult className="mt-4 rounded-xl border border-dashed" title="Още няма бележки." />
       )}
     </section>
   );

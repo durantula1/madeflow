@@ -3,7 +3,7 @@ import { ShieldCheck } from "lucide-react";
 
 import { Wordmark } from "@/components/brand/wordmark";
 export const metadata: Metadata = {
-  title: "Преглед на промяна · MadeFlow",
+  title: "Преглед на промяна · Pakto",
   robots: { index: false, follow: false },
   referrer: "no-referrer",
 };

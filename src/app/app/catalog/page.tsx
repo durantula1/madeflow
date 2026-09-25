@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { FilePlus2 } from "lucide-react";
 
@@ -5,6 +6,7 @@ import { CatalogManager } from "@/components/catalog/catalog-manager";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConfirmAction } from "@/components/workspace/confirm-action";
 import { PageHeader } from "@/components/workspace/page/page-header";
+import { EmptyResult } from "@/components/workspace/page/empty-result";
 import { PageShell } from "@/components/workspace/page/page-shell";
 import { can } from "@/lib/authz/permissions";
 import { getCurrentMember } from "@/lib/authz/project-access";
@@ -14,6 +16,8 @@ import { archiveTemplateAction } from "@/modules/catalog/actions";
 import { listCatalog, listTemplates } from "@/modules/catalog/queries";
 
 const dateFormat = new Intl.DateTimeFormat("bg-BG", { dateStyle: "medium" });
+
+export const metadata: Metadata = { title: "Каталог" };
 
 export default async function CatalogPage({ searchParams }: PageProps<"/app/catalog">) {
   const [query, context] = await Promise.all([searchParams, requireTenantContext()]);
@@ -25,8 +29,8 @@ export default async function CatalogPage({ searchParams }: PageProps<"/app/cata
       <PageHeader page="catalog" />
       <Tabs defaultSelectedKey={query.tab === "templates" ? "templates" : "items"}>
         <TabsList>
-          <TabsTrigger id="items">Позиции{items.length ? <span className="ml-1 rounded-full bg-sidebar-accent px-1.5 text-[11px]">{items.length}</span> : null}</TabsTrigger>
-          <TabsTrigger id="templates">Шаблони{templates.length ? <span className="ml-1 rounded-full bg-sidebar-accent px-1.5 text-[11px]">{templates.length}</span> : null}</TabsTrigger>
+          <TabsTrigger id="items">Позиции{items.length ? <span className="ml-1 rounded-full bg-sidebar-accent px-1.5 text-2xs">{items.length}</span> : null}</TabsTrigger>
+          <TabsTrigger id="templates">Шаблони{templates.length ? <span className="ml-1 rounded-full bg-sidebar-accent px-1.5 text-2xs">{templates.length}</span> : null}</TabsTrigger>
         </TabsList>
         <TabsContent id="items" className="pt-5">
           <CatalogManager items={items} canEdit={canEdit} />
@@ -52,10 +56,11 @@ export default async function CatalogPage({ searchParams }: PageProps<"/app/cata
               })}
             </ul>
           ) : (
-            <div className="rounded-2xl border border-dashed bg-card p-8 text-center">
-              <p className="font-semibold">Още няма шаблони</p>
-              <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">Отвори оферта, която правиш често, например „Ремонт на баня“, и избери <span className="font-medium text-foreground">Още → Запази като шаблон</span>. Следващия път започваш от нея, а не от празен лист.</p>
-            </div>
+            <EmptyResult
+              className="rounded-2xl border border-dashed bg-card"
+              title="Още няма шаблони"
+              description={<>Отвори оферта, която правиш често, например „Ремонт на баня“, и избери <span className="font-medium text-foreground">Още → Запази като шаблон</span>. Следващия път започваш от нея, а не от празен лист.</>}
+            />
           )}
         </TabsContent>
       </Tabs>

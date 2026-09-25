@@ -83,7 +83,7 @@ export function DetailHeaderSkeleton({ backLabel, action = true }: {
     <DetailHeader
       loading
       backLabel={backLabel ?? <span className="flex h-5 items-center"><Skeleton className="h-3.5 w-20" /></span>}
-      title={<div className="flex h-[30px] items-center"><Skeleton className="h-6 w-64 max-w-full" /></div>}
+      title={<div className="flex h-[1.875rem] items-center"><Skeleton className="h-6 w-64 max-w-full" /></div>}
       status={<Skeleton className="h-5 w-20 rounded-full" />}
       metadata={<span className="flex h-5 items-center"><Skeleton className="h-3.5 w-56 max-w-full" /></span>}
       action={action ? <Skeleton className="h-8 w-32 rounded-lg" /> : undefined}

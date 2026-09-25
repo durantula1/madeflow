@@ -1,4 +1,4 @@
-# MadeFlow
+# Pakto
 
 Mobile-first пилот за договорени оферти, промени, срокове, етапи и плащания
 по строителни и ремонтни обекти.
@@ -19,7 +19,7 @@ bootstrap линкът създава отделна HttpOnly portal session.
 Изисква Node 24.19+ и pnpm 11.21.
 
 1. Копирай `.env.example` като `.env.local`.
-2. Създай отделен Supabase проект за MadeFlow.
+2. Създай отделен Supabase проект за Pakto.
 3. Попълни publishable URL/key, server-only `DATABASE_URL` и постоянен `PORTAL_LINK_SECRET`.
 4. Приложи миграциите от `drizzle/` (или еквивалентната Supabase migration).
 5. Стартирай `pnpm dev`.
@@ -41,6 +41,6 @@ pnpm build
   от database trigger;
 - решенията и timeline events са append-only и idempotent.
 
-Пилотът не издава фактури. Старите MadeFlow passport маршрути са достъпни
+Пилотът не издава фактури. Старите passport маршрути (от предишния продукт MadeFlow) са достъпни
 само за owner, докато бъдат премахнати след пилота. Подробните стъпки за
 приемане са в `docs/implementation-plan.md`.

@@ -32,7 +32,7 @@ export function NavLink({
         )}
       >
         {icon}
-        <span className="max-w-full truncate text-[10px] font-medium">{label}</span>
+        <span className="max-w-full truncate text-3xs font-medium">{label}</span>
         <NavPending />
       </Link>
     );

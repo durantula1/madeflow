@@ -32,13 +32,13 @@ function Sheet({
   return (
     <article
       style={{ transform }}
-      className={`absolute left-1/2 top-1/2 w-[250px] rounded-2xl bg-[#fffaf0] text-[#102b38] shadow-[0_22px_50px_rgba(0,0,0,0.38)] ${className ?? ""}`}
+      className={`absolute left-1/2 top-1/2 w-[15.625rem] rounded-2xl bg-[#fffaf0] text-[#102b38] shadow-[0_22px_50px_rgba(0,0,0,0.38)] ${className ?? ""}`}
     >
       <div className="flex items-center justify-between border-b border-[#102b38]/10 px-4 py-3">
-        <span className="font-mono text-[11px] tracking-wide text-[#52707d]">
+        <span className="font-mono text-2xs tracking-wide text-[#52707d]">
           {code}
         </span>
-        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#ff765f]">
+        <span className="text-3xs font-semibold uppercase tracking-[0.14em] text-[#ff765f]">
           {kicker}
         </span>
       </div>
@@ -46,10 +46,10 @@ function Sheet({
         <p className="text-sm font-semibold">{title}</p>
         <div className="mt-3 space-y-2">
           {rows.map((row) => (
-            <div key={row.name} className="flex items-baseline justify-between gap-3 text-[12px]">
+            <div key={row.name} className="flex items-baseline justify-between gap-3 text-[0.75rem]">
               <span>
                 <span className="block leading-4">{row.name}</span>
-                <span className="text-[10px] text-[#52707d]">{row.meta}</span>
+                <span className="text-3xs text-[#52707d]">{row.meta}</span>
               </span>
               <span className="shrink-0 tabular-nums">{row.amount}</span>
             </div>
@@ -57,12 +57,12 @@ function Sheet({
         </div>
       </div>
       <div className="flex items-center justify-between rounded-b-2xl bg-[#102b38] px-4 py-3 text-[#fffaf0]">
-        <span className="text-[10px] uppercase tracking-[0.16em] text-white/55">
+        <span className="text-3xs uppercase tracking-[0.16em] text-white/55">
           Общо
         </span>
         <span className="text-right">
           {approved ? (
-            <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-[#ff765f]">
+            <span className="mb-0.5 block text-3xs font-semibold uppercase tracking-[0.14em] text-[#ff765f]">
               Одобрена
             </span>
           ) : null}
@@ -108,10 +108,10 @@ export function AuthStage() {
     >
       <div
         className="absolute inset-x-0 top-16 bottom-56 grid place-items-center"
-        style={{ perspective: 1400 }}
+        style={{ perspective: "87.5rem" }}
       >
         <motion.div
-          className="relative h-[340px] w-[460px]"
+          className="relative h-[21.25rem] w-[28.75rem]"
           style={{ transformStyle: "preserve-3d" }}
           animate={reduce ? undefined : { y: [0, -10, 0] }}
           transition={
@@ -129,7 +129,7 @@ export function AuthStage() {
           >
           <div
             className="absolute left-1/2 top-[78%] h-10 w-64 -translate-x-1/2 rounded-full bg-black/45 blur-2xl"
-            style={{ transform: "translateZ(-120px)" }}
+            style={{ transform: "translateZ(-7.5rem)" }}
           />
           <Sheet
             code="ОФ · в1"
@@ -141,7 +141,7 @@ export function AuthStage() {
             ]}
             total="1 620 EUR"
             className="opacity-70"
-            transform="translate(-50%, -50%) translate3d(-128px, 42px, -90px) rotateZ(-13deg) scale(0.92)"
+            transform="translate(-50%, -50%) translate3d(-8rem, 2.625rem, -5.625rem) rotateZ(-13deg) scale(0.92)"
           />
           <Sheet
             code="ОФ-001"
@@ -153,7 +153,7 @@ export function AuthStage() {
               { name: "Довършване", meta: "1 бр.", amount: "480" },
             ]}
             total="2 400 EUR"
-            transform="translate(-50%, -50%) translate3d(-46px, 6px, 0px) rotateZ(-7deg)"
+            transform="translate(-50%, -50%) translate3d(-2.875rem, 0.375rem, 0) rotateZ(-7deg)"
           />
           <Sheet
             code="ПР-001"
@@ -162,7 +162,7 @@ export function AuthStage() {
             rows={[{ name: "Допълнение", meta: "+2 дни", amount: "+320" }]}
             total="+320 EUR"
             approved
-            transform="translate(-50%, -50%) translate3d(48px, -16px, 80px) rotateZ(8deg)"
+            transform="translate(-50%, -50%) translate3d(3rem, -1rem, 5rem) rotateZ(8deg)"
           />
           </motion.div>
         </motion.div>

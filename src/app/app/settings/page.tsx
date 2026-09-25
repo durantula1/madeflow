@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { SettingsSection } from "@/components/settings/settings-section";
@@ -9,6 +10,8 @@ import { createClient } from "@/lib/supabase/server";
 import { changeEmailAction, updateProfileAction } from "@/modules/account/actions";
 import { syncProfileEmail } from "@/modules/account/mutations";
 import { getAccountProfile } from "@/modules/account/queries";
+
+export const metadata: Metadata = { title: "Профил · Настройки" };
 
 export default async function ProfileSettingsPage({ searchParams }: PageProps<"/app/settings">) {
   const query = await searchParams;
