@@ -130,7 +130,6 @@ export default async function ChangeOrderPage({ params, searchParams }: PageProp
                 <TabsTrigger id="history">{documentTabLabels.history}</TabsTrigger>
               </TabsList>
               <TabsContent id="document" className="flex flex-col gap-4 pt-4">
-                <p className="text-xs text-muted-foreground">{change.frozenAt ? "Така го вижда клиентът." : "Така ще го види клиентът, когато го изпратиш."}</p>
                 <DocumentBody document={change} />
                 <AttachmentsPanel changeOrderId={change.id} initial={attachments} editable={canEdit && change.revisionStatus === "draft"} />
                 {showChanges ? (

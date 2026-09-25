@@ -37,7 +37,6 @@ export function DocumentPageSkeleton() {
           <div className="flex flex-col gap-2">
             <TabsSkeleton labels={[documentTabLabels.document, documentTabLabels.history]} />
             <div className="flex flex-col gap-4 pt-4">
-              <Skeleton className="h-3 w-40" />
               <Card>
                 <CardContent className="flex flex-col gap-2">
                   <Line className="w-28" />
