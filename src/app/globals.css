@@ -39,6 +39,14 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-tile-mint: var(--tile-mint);
+  --color-tile-mint-foreground: var(--tile-mint-foreground);
+  --color-tile-teal: var(--tile-teal);
+  --color-tile-teal-foreground: var(--tile-teal-foreground);
+  --color-tile-blue: var(--tile-blue);
+  --color-tile-blue-foreground: var(--tile-blue-foreground);
+  --color-tile-coral: var(--tile-coral);
+  --color-tile-coral-foreground: var(--tile-coral-foreground);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -82,6 +90,15 @@
   --chart-4: #bceba8;
   --chart-5: #102b38;
   --radius: 0.85rem;
+  /* Soft KPI tiles; each tone means something (see StatCard), never decoration. */
+  --tile-mint: #e2f5d8;
+  --tile-mint-foreground: #1d4a2b;
+  --tile-teal: #dceeea;
+  --tile-teal-foreground: #0b5d4f;
+  --tile-blue: #deeff2;
+  --tile-blue-foreground: #18394c;
+  --tile-coral: #ffe3dc;
+  --tile-coral-foreground: #8f2f1f;
   --sidebar: #102b38;
   --sidebar-foreground: #e8f1ed;
   --sidebar-primary: #ff765f;

@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Mail, MapPin, Phone, Plus } from "lucide-react";
+import { MapPin, Plus, UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { BreadcrumbCurrent } from "@/components/workspace/app-breadcrumb";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NotesPanel } from "@/components/notes/notes-panel";
@@ -15,6 +16,7 @@ import { DetailHeader } from "@/components/workspace/detail-header";
 import { EmptyResult } from "@/components/workspace/page/empty-result";
 import { PageShell } from "@/components/workspace/page/page-shell";
 import { StatCard } from "@/components/workspace/stat-card";
+import { ProjectDashboard, formatDay, methodLabels, paymentLabels, stageLabels, workLabels } from "@/components/projects/project-dashboard";
 import { FilterSelect } from "@/components/workspace/filter-select";
 import { ListPagination } from "@/components/workspace/list-filters";
 import { ProjectControls } from "@/components/projects/project-controls";
@@ -33,12 +35,9 @@ import { formatCents, getProjectState } from "@/modules/projects/state";
 import { updateChangeWorkAction, updateMilestoneAction } from "@/modules/projects/operations";
 import { getActivePortalLink } from "@/modules/change-portal/links";
 import { createOrRotatePortalLinkAction } from "@/modules/change-portal/staff-actions";
-import { projectStatLabels, projectStatsClassName, projectTabLabels } from "./project-skeleton";
+import { projectStatLabels, projectStatsClassName, projectStatusLabels, projectTabLabels } from "./project-skeleton";
 
-const stageLabels: Record<string, string> = { planned: "Предстои", in_progress: "В работа", completed: "Завършен" };
-const workLabels: Record<string, string> = { not_started: "Одобрена, предстои", scheduled: "Планирана", in_progress: "В работа", completed: "Завършена" };
-const paymentLabels: Record<string, string> = { deposit: "Капаро", progress: "Междинно", final: "Окончателно", other: "Друго" };
-const methodLabels: Record<string, string> = { cash: "В брой", bank: "Банков превод", card: "Карта", other: "Друго" };
+const sinceFormat = new Intl.DateTimeFormat("bg-BG", { month: "long", year: "numeric" });
 const tabs = ["overview", "documents", "work", "payments", "notes"] as const;
 const DOCUMENTS_PAGE_SIZE = 10;
 
@@ -84,17 +83,26 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
   const allReceiptsHref = can(member, "finance.view") && state.receiptsTotal > state.receipts.length && state.firstReceiptOn
     ? `/app/finance?${new URLSearchParams({ projectId, from: state.firstReceiptOn, to: state.lastReceiptOn && state.lastReceiptOn > today ? state.lastReceiptOn : today })}`
     : null;
+  const paidPercent = state.contractMinor > 0n ? Number((state.paidMinor * 100n) / state.contractMinor) : null;
+  const overdueMinor = state.installments.filter((item) => item.dueOn < today && item.remainingMinor > 0n).reduce((sum, item) => sum + item.remainingMinor, 0n);
+  const daysToDeadline = state.deadline ? Math.round((Date.parse(state.deadline) - Date.parse(today)) / 86_400_000) : null;
 
   return (
     <PageShell>
+      <BreadcrumbCurrent label={project.name} />
       <DetailHeader
+        inBreadcrumb
         backHref="/app/projects"
         backLabel="Обекти"
         title={project.name}
-        status={<Badge variant="secondary">Активен</Badge>}
-        metadata={<span className="inline-flex min-w-0 items-center gap-1.5"><MapPin className="size-4" /> {project.siteAddress}</span>}
+        status={<Badge className="h-6 bg-sidebar px-2.5 text-sidebar-foreground">{projectStatusLabels[project.status] ?? project.status}</Badge>}
+        metadata={<>
+          {project.contactName ? <span className="inline-flex min-w-0 items-center gap-1.5"><UserRound className="size-4" /> {project.contactName}</span> : null}
+          <span className="inline-flex min-w-0 items-center gap-1.5"><MapPin className="size-4" /> {project.siteAddress}</span>
+          <span>от {sinceFormat.format(project.createdAt)}</span>
+        </>}
         action={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 [&_a]:rounded-full [&_button]:rounded-full">
             {canOffer && !offersTotal ? <Link href={`/app/offers/new?projectId=${project.id}`} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-2.5 text-sm font-medium text-primary-foreground"><Plus className="size-4" /> Нова оферта</Link> : null}
             {canDraft && approvedOffers.length ? <Link href={`/app/offers/changes/new?projectId=${project.id}`} className="inline-flex h-8 items-center gap-1.5 rounded-lg border bg-card px-2.5 text-sm font-medium"><Plus className="size-4" /> Нова промяна</Link> : null}
             {portalUrl ? <CopyPortalLink url={portalUrl} /> : null}
@@ -103,12 +111,12 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
         }
       />
       <div className={projectStatsClassName}>
-        <StatCard label={projectStatLabels.price} value={state.offer ? formatCents(state.contractMinor, state.currency) : "Очаква одобрена оферта"} />
-        <StatCard label={projectStatLabels.paid} value={formatCents(state.paidMinor, state.currency)} />
-        <StatCard label={projectStatLabels.remaining} value={state.offer ? formatCents(state.remainingMinor, state.currency) : "—"} />
-        <StatCard label={projectStatLabels.deadline} value={state.deadline ?? "Очаква одобрение"} />
+        <StatCard tone="mint" label={projectStatLabels.price} value={state.offer ? formatCents(state.contractMinor, state.currency) : "—"} hint={state.offer ? (state.changes.length ? `Оферта и ${state.changes.length} ${state.changes.length === 1 ? "промяна" : "промени"}` : "Основна оферта") : "Очаква одобрена оферта"} />
+        <StatCard tone="teal" label={projectStatLabels.paid} value={formatCents(state.paidMinor, state.currency)} hint={paidPercent !== null ? `${paidPercent}% от договореното` : `${state.receiptsTotal} ${state.receiptsTotal === 1 ? "плащане" : "плащания"}`} />
+        <StatCard tone={overdueMinor > 0n ? "coral" : "blue"} label={projectStatLabels.remaining} value={state.offer ? formatCents(state.remainingMinor, state.currency) : "—"} hint={overdueMinor > 0n ? `Просрочено ${formatCents(overdueMinor, state.currency)}` : state.offer && state.remainingMinor <= 0n ? "Изплатено изцяло" : "Няма просрочени вноски"} />
+        <StatCard tone="blue" label={projectStatLabels.deadline} value={state.deadline ? formatDay(state.deadline) : "—"} hint={daysToDeadline === null ? "Очаква одобрение" : daysToDeadline > 0 ? `След ${daysToDeadline} ${daysToDeadline === 1 ? "ден" : "дни"}` : daysToDeadline === 0 ? "Днес" : `Изтекъл преди ${-daysToDeadline} ${daysToDeadline === -1 ? "ден" : "дни"}`} />
       </div>
-      <Tabs defaultSelectedKey={(tab === "payments" && !showPayments) || (tab === "notes" && !canNotes) ? "overview" : tab}>
+      <Tabs key={tab} defaultSelectedKey={(tab === "payments" && !showPayments) || (tab === "notes" && !canNotes) ? "overview" : tab}>
         <TabsList>
           <TabsTrigger id="overview">{projectTabLabels.overview}</TabsTrigger>
           <TabsTrigger id="documents">{projectTabLabels.documents}</TabsTrigger>
@@ -116,30 +124,16 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
           {showPayments ? <TabsTrigger id="payments">{projectTabLabels.payments}</TabsTrigger> : null}
           {canNotes ? <TabsTrigger id="notes">{projectTabLabels.notes}{notes.length ? <span className="ml-1 rounded-full bg-sidebar-accent px-1.5 text-2xs">{notes.length}</span> : null}</TabsTrigger> : null}
         </TabsList>
-        <TabsContent id="overview" className="flex flex-col gap-5 pt-5">
-          <div className="grid gap-5 lg:grid-cols-2">
-            <Card>
-              <CardHeader><CardTitle>Клиент</CardTitle></CardHeader>
-              <CardContent className="flex flex-col gap-3">
-                <p className="font-medium">{project.contactName}</p>
-                {project.contactEmail ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Mail className="size-4" /> {project.contactEmail}</p> : null}
-                {project.contactPhone ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Phone className="size-4" /> {project.contactPhone}</p> : null}
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline">Може да одобрява</Badge>
-                  {project.contactEmailVerifiedAt ? <Badge>Имейлът е потвърден от клиента</Badge> : <Badge variant="secondary">Имейлът не е потвърден</Badge>}
-                </div>
-                {project.contactEmailVerifiedAt ? null : <p className="text-xs text-muted-foreground">Клиентът потвърждава имейла си при първото отваряне на линка. След това само той може да го промени.</p>}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle>Договорено</CardTitle></CardHeader>
-              <CardContent className="flex flex-col gap-2 text-sm">
-                {state.offer ? <div className="flex justify-between gap-3"><span>Основна оферта · {state.offer.title}</span><strong>{Number(state.offer.total).toFixed(2)} {state.currency}</strong></div> : <p className="text-muted-foreground">Още няма одобрена оферта.</p>}
-                {state.changes.map((change) => <div key={change.id} className="flex justify-between gap-3 border-t pt-2"><span>{change.title} · {workLabels[change.workStatus] ?? change.workStatus}</span><strong>{Number(change.total) >= 0 ? "+" : ""}{Number(change.total).toFixed(2)} {state.currency}</strong></div>)}
-              </CardContent>
-            </Card>
-          </div>
-          {state.pendingDocuments.length ? <Card><CardHeader><CardTitle>Чакат решение от клиента</CardTitle></CardHeader><CardContent className="flex flex-col gap-2">{state.pendingDocuments.map((item) => <Link key={item.id} href={`/app/offers/${item.id}`} className="flex justify-between gap-3 text-sm text-primary underline"><span>{item.kind === "offer" ? "Оферта" : "Промяна"}: {item.title}</span><span>{item.total} {item.currency}</span></Link>)}</CardContent></Card> : null}
+        <TabsContent id="overview" className="pt-4">
+          <ProjectDashboard
+            project={project}
+            state={state}
+            path={path}
+            today={today}
+            showPayments={showPayments}
+            openDisputes={disputes.length}
+            paymentsHref={allReceiptsHref ?? `${path}?tab=payments`}
+          />
         </TabsContent>
         <TabsContent id="documents" className="flex flex-col gap-5 pt-5">
           <DocumentTable label="Оферти" empty="Започни с оферта за този обект." rows={offers} pagination={<ListPagination path={path} params={documentParams} page={offersPage} total={offersTotal} pageSize={DOCUMENTS_PAGE_SIZE} pageParam="offersPage" />} />

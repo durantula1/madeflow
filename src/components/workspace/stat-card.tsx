@@ -12,35 +12,55 @@ const valueSizes = {
   xl: "min-h-9 text-3xl tracking-tight",
 };
 
-export function StatCard({ label, value, size = "md", icon }: {
+/** A tone carries meaning (agreed, received, attention, time), so tiles never form a rainbow. */
+const tones = {
+  default: "",
+  mint: "bg-tile-mint text-tile-mint-foreground ring-transparent",
+  teal: "bg-tile-teal text-tile-teal-foreground ring-transparent",
+  blue: "bg-tile-blue text-tile-blue-foreground ring-transparent",
+  coral: "bg-tile-coral text-tile-coral-foreground ring-transparent",
+};
+
+export type StatTone = keyof typeof tones;
+
+export function StatCard({ label, value, size = "md", icon, tone = "default", hint }: {
   label: ReactNode;
   value: ReactNode;
   size?: keyof typeof valueSizes;
   icon?: ReactNode;
+  tone?: StatTone;
+  /** One short line under the value, e.g. "32% от договореното". */
+  hint?: ReactNode;
 }) {
+  const toned = tone !== "default";
   return (
-    <Card>
+    <Card className={tones[tone]}>
       <CardContent className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm text-muted-foreground">{label}</p>
-          <div className={cn("mt-2 flex items-center font-semibold", valueSizes[size])}>{value}</div>
+          <p className={cn("text-sm", toned ? "opacity-75" : "text-muted-foreground")}>{label}</p>
+          <div className={cn("mt-2 flex items-center font-semibold tabular-nums", valueSizes[size])}>{value}</div>
+          {hint !== undefined ? <div className={cn("mt-1 flex min-h-4 items-center text-xs", toned ? "opacity-75" : "text-muted-foreground")}>{hint}</div> : null}
         </div>
-        {icon ? <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">{icon}</span> : null}
+        {icon ? <span className={cn("grid size-10 shrink-0 place-items-center rounded-xl", toned ? "bg-card/60" : "bg-primary/10 text-primary")}>{icon}</span> : null}
       </CardContent>
     </Card>
   );
 }
 
 /** Keeps the real label (it is static) and greys out only the value. */
-export function StatCardSkeleton({ label, size = "md", icon }: {
+export function StatCardSkeleton({ label, size = "md", icon, tone, hint = false }: {
   label?: ReactNode;
   size?: keyof typeof valueSizes;
   icon?: ReactNode;
+  tone?: StatTone;
+  hint?: boolean;
 }) {
   return <StatCard
     size={size}
     icon={icon}
+    tone={tone}
     label={label ?? <span className="flex h-5 items-center"><Skeleton className="h-3.5 w-24" /></span>}
     value={<Skeleton className={cn("w-28", size === "sm" || size === "md" ? "h-5" : "h-6")} />}
+    hint={hint ? <Skeleton className="h-3 w-24" /> : undefined}
   />;
 }

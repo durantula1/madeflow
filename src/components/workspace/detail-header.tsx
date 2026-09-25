@@ -13,6 +13,8 @@ type DetailHeaderProps = {
   action?: ReactNode;
   actionClassName?: string;
   loading?: boolean;
+  /** The page labels itself in the top-bar breadcrumb, so the back button is only needed on mobile. */
+  inBreadcrumb?: boolean;
 };
 
 const backClassName =
@@ -27,7 +29,9 @@ export function DetailHeader({
   action,
   actionClassName,
   loading = false,
+  inBreadcrumb = false,
 }: DetailHeaderProps) {
+  const backClasses = `${backClassName} ${inBreadcrumb ? "lg:hidden" : ""}`;
   const backContent = (
     <>
       <ArrowLeft className="size-4 shrink-0" aria-hidden="true" />
@@ -40,12 +44,12 @@ export function DetailHeader({
       {backHref ? (
         <Link
           href={backHref}
-          className={`${backClassName} hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50`}
+          className={`${backClasses} hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50`}
         >
           {backContent}
         </Link>
       ) : (
-        <div className={backClassName} aria-hidden="true">
+        <div className={backClasses} aria-hidden="true">
           {backContent}
         </div>
       )}
@@ -54,7 +58,7 @@ export function DetailHeader({
           {loading ? (
             <div className="min-w-0">{title}</div>
           ) : (
-            <h1 className="min-w-0 text-2xl font-semibold leading-tight tracking-tight break-words">
+            <h1 className={`min-w-0 font-semibold ${inBreadcrumb ? "text-xl" : "text-2xl"} leading-tight tracking-tight break-words`}>
               {title}
             </h1>
           )}
@@ -74,19 +78,21 @@ export function DetailHeader({
 }
 
 /** Real back button and layout; only the record's own title and metadata are placeholders. */
-export function DetailHeaderSkeleton({ backLabel, action = true }: {
+export function DetailHeaderSkeleton({ backLabel, action = true, inBreadcrumb = false }: {
   /** Omit when the back target depends on the record (the label is then a placeholder too). */
   backLabel?: string;
   action?: boolean;
+  inBreadcrumb?: boolean;
 }) {
   return (
     <DetailHeader
       loading
+      inBreadcrumb={inBreadcrumb}
       backLabel={backLabel ?? <span className="flex h-5 items-center"><Skeleton className="h-3.5 w-20" /></span>}
-      title={<div className="flex h-[1.875rem] items-center"><Skeleton className="h-6 w-64 max-w-full" /></div>}
-      status={<Skeleton className="h-5 w-20 rounded-full" />}
+      title={<div className={`flex items-center ${inBreadcrumb ? "h-[1.5625rem]" : "h-[1.875rem]"}`}><Skeleton className="h-6 w-64 max-w-full" /></div>}
+      status={<Skeleton className={inBreadcrumb ? "h-6 w-20 rounded-full" : "h-5 w-20 rounded-full"} />}
       metadata={<span className="flex h-5 items-center"><Skeleton className="h-3.5 w-56 max-w-full" /></span>}
-      action={action ? <Skeleton className="h-8 w-32 rounded-lg" /> : undefined}
+      action={action ? <Skeleton className={inBreadcrumb ? "h-8 w-32 rounded-full" : "h-8 w-32 rounded-lg"} /> : undefined}
     />
   );
 }
