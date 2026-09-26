@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { Badge } from "@/components/ui/badge";
 import { DocumentStatusBadge } from "@/components/change-orders/document-status-badge";
 import { DataTable, DataTableSkeleton, type DataTableColumn } from "@/components/workspace/data-table";
 import { ListPagination, ListPaginationSkeleton } from "@/components/workspace/list-filters";
@@ -42,7 +43,7 @@ export async function OffersTable({ filters, page, searchState }: {
           <span key="code" className="font-mono text-xs text-muted-foreground">{documentCode("offer", offer.sequenceNumber)}</span>,
           <div key="title"><p className="font-medium">{offer.title}</p><p className="text-sm text-muted-foreground">{offer.projectName} · версия {offer.revisionNumber}</p></div>,
           <DocumentStatusBadge key="status" status={offer.revisionStatus} />,
-          changeCount?.total ? <span key="changes" className="whitespace-nowrap">{changeCount.total}{changeCount.pending ? <span className="font-medium text-primary"> · {changeCount.pending} {changeCount.pending === 1 ? "чака решение" : "чакат решение"}</span> : null}</span> : <span key="changes" className="text-muted-foreground">—</span>,
+          changeCount?.total ? <span key="changes" className="inline-flex items-center gap-2 whitespace-nowrap"><span className="tabular-nums">{changeCount.total}</span>{changeCount.pending ? <Badge variant="sent">{changeCount.pending} {changeCount.pending === 1 ? "чака решение" : "чакат решение"}</Badge> : null}</span> : <span key="changes" className="text-muted-foreground">—</span>,
           <span key="total" className="font-semibold">{Number(offer.total ?? 0).toFixed(2)} {offer.currency}</span>,
         ],
       };

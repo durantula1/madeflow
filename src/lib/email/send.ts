@@ -2,9 +2,12 @@ import "server-only";
 
 import { Resend } from "resend";
 
+import { PAKTO_LOGO_PNG_BASE64 } from "@/lib/email/logo";
 import { getServerEnvironment } from "@/lib/env/server";
 
-type Attachment = { filename: string; content: Buffer };
+type Attachment = { filename: string; content: Buffer; contentId?: string };
+
+const LOGO_CONTENT_ID = "pakto-logo";
 
 let client: Resend | undefined;
 
@@ -12,8 +15,26 @@ export async function sendEmail(message: { to: string; subject: string; text: st
   const environment = getServerEnvironment();
   if (!environment.RESEND_API_KEY) throw new Error("Имейл услугата не е настроена.");
   client ??= new Resend(environment.RESEND_API_KEY);
-  const { error } = await client.emails.send({ from: environment.EMAIL_FROM, ...message });
+  const { error } = await client.emails.send({
+    from: environment.EMAIL_FROM,
+    ...message,
+    html: brandedLayout(message.html),
+    // Inline (cid:) rather than a hosted URL: shows without "load images" and without a public address.
+    attachments: [...(message.attachments ?? []), { filename: "pakto.png", content: Buffer.from(PAKTO_LOGO_PNG_BASE64, "base64"), contentId: LOGO_CONTENT_ID }],
+  });
   if (error) throw new Error(`Имейлът не беше изпратен: ${error.message}`);
+}
+
+/** Every email gets the same frame: the Pakto logo on top, the message in a white card, a short footer. Tables and inline styles, because email clients ignore most CSS. */
+function brandedLayout(body: string) {
+  const font = "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif";
+  return `<!doctype html><html lang="bg"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#f4efe6">`
+    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4efe6"><tr><td align="center" style="padding:24px 12px">`
+    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px">`
+    + `<tr><td style="padding:0 4px 16px"><img src="cid:${LOGO_CONTENT_ID}" width="32" height="32" alt="Pakto" style="display:inline-block;vertical-align:middle;border:0;border-radius:8px"><span style="${font};display:inline-block;vertical-align:middle;margin-left:10px;font-size:20px;font-weight:800;letter-spacing:-0.5px;color:#102b38">Pakto</span></td></tr>`
+    + `<tr><td style="${font};background:#ffffff;border-radius:16px;padding:24px;font-size:15px;line-height:1.55;color:#18181b">${body}</td></tr>`
+    + `<tr><td style="${font};padding:16px 4px 0;font-size:12px;line-height:1.5;color:#71717a">Изпратено чрез Pakto: оферти, промени и плащания по обекта на едно място.</td></tr>`
+    + `</table></td></tr></table></body></html>`;
 }
 
 export function escapeHtml(value: string) {

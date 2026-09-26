@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { ShieldCheck } from "lucide-react";
 
 import { Wordmark } from "@/components/brand/wordmark";
+import { DownloadTray } from "@/components/workspace/download-tray";
 export const metadata: Metadata = {
   title: "Преглед на промяна · Pakto",
   robots: { index: false, follow: false },
@@ -21,6 +22,7 @@ export default function PortalLayout({
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6 sm:py-8">{children}</main>
+      <DownloadTray />
     </div>
   );
 }

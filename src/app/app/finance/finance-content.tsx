@@ -73,8 +73,8 @@ function Delta({ current, previous }: { current: bigint; previous: bigint }) {
   const up = change >= 0;
   const Icon = up ? TrendingUp : TrendingDown;
   return <span className="flex items-center gap-1">
-    <span className={cn("flex items-center gap-0.5 font-medium", up ? "text-emerald-700 dark:text-emerald-400" : "text-destructive")}>
-      <Icon className="size-3.5" />{up ? "+" : ""}{change.toLocaleString("bg-BG", { maximumFractionDigits: 1 })}%
+    <span className={cn("flex items-center gap-0.5 font-medium", up ? "text-foreground" : "text-destructive")}>
+      <Icon className={cn("size-3.5", up && "rounded-sm bg-brand-green text-[#102b38]")} />{up ? "+" : ""}{change.toLocaleString("bg-BG", { maximumFractionDigits: 1 })}%
     </span>
     <span className="text-muted-foreground">спрямо предходния период</span>
   </span>;

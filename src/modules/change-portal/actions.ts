@@ -3,15 +3,18 @@
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, desc, eq, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { getDatabase } from "@/db";
 import {
   changeOrderRevisions,
   changeOrders,
+  offerAcceptances,
   organizationMembers,
+  paymentClaims,
   paymentDisputes,
+  paymentInstallments,
   portalDecisions,
   projectMembers,
   projectReceipts,
@@ -26,6 +29,7 @@ import { checkOtp, consumeOtp, issueOtp } from "@/modules/change-portal/verifica
 import { getPdfDocumentMeta, renderChangePdf } from "@/modules/pdf/render";
 import { notifyProjectStaff, notifyUsers } from "@/modules/notifications/staff";
 import { parseSignature, removeSignature, storeSignature } from "@/modules/change-portal/signature";
+import { applyApprovedOffer } from "@/modules/change-orders/approval";
 
 const decisionSchema = z.object({
   projectPublicId: z.uuid(),
@@ -46,6 +50,7 @@ async function decisionContext(data: z.infer<typeof decisionSchema>) {
   if (data.decision === "approved") parseSignature(data.signature);
   const session = await getPortalSession(data.projectPublicId);
   if (!session || session.contactRole !== "approver") throw new Error("Нямаш право да вземеш решение.");
+  if (session.projectStatus !== "active") throw new Error("Обектът е приключен. Свържи се с фирмата.");
   if (!session.contactEmailVerifiedAt || !session.contactEmail) throw new Error("Първо потвърди имейла си.");
   if (await isOrganizationStaff(session.organizationId)) {
     const [change] = await getDatabase().select({ id: changeOrders.id }).from(changeOrders)
@@ -70,7 +75,9 @@ async function pendingRevision(tx: Pick<ReturnType<typeof getDatabase>, "select"
       revisionNumber: changeOrderRevisions.revisionNumber,
       total: changeOrderRevisions.total,
       currency: changeOrderRevisions.currency,
+      responseDueAt: changeOrderRevisions.responseDueAt,
       currentRevisionId: changeOrders.currentRevisionId,
+      documentKind: changeOrders.documentKind,
     })
     .from(changeOrderRevisions)
     .innerJoin(changeOrders, eq(changeOrders.id, changeOrderRevisions.changeOrderId))
@@ -83,6 +90,8 @@ async function pendingRevision(tx: Pick<ReturnType<typeof getDatabase>, "select"
     .limit(1);
   if (revision?.status === "superseded") throw new Error("Фирмата обнови този документ. Презареди страницата, за да видиш последната версия.");
   if (!revision?.contentHash || revision.currentRevisionId !== revision.id || !["sent", "viewed"].includes(revision.status)) throw new Error("Тази версия вече не очаква решение.");
+  // The daily job may not have run yet; the validity date on the document is what counts.
+  if (revision.responseDueAt && revision.responseDueAt < new Date()) throw new Error("Срокът за решение по тази версия изтече. Презареди страницата.");
   return { ...revision, contentHash: revision.contentHash };
 }
 
@@ -189,9 +198,14 @@ async function submitDecision(
       .set({
         lifecycleStatus:
           data.decision === "changes_requested" ? "open" : "resolved",
+        // The approved version comes into force; an earlier approved one stays approved in the history.
+        ...(data.decision === "approved" ? { approvedRevisionId: revision.id } : {}),
         updatedAt: new Date(),
       })
       .where(eq(changeOrders.id, revision.changeOrderId));
+    if (data.decision === "approved" && revision.documentKind === "offer") {
+      await applyApprovedOffer(transaction, { organizationId: session.organizationId, projectId: session.projectId, offerId: revision.changeOrderId, revisionId: revision.id, approvedAt: new Date() });
+    }
     await transaction.insert(timelineEvents).values({
       organizationId: session.organizationId,
       projectId: session.projectId,
@@ -277,7 +291,7 @@ async function sendDecisionReceipt(decisionId: number) {
   const disputeUrl = `${getPublicEnvironment().NEXT_PUBLIC_APP_URL}/portal/dispute/${createDisputeToken(decisionId)}`;
   const when = new Intl.DateTimeFormat("bg-BG", { dateStyle: "long", timeStyle: "medium", timeZone: "Europe/Sofia" }).format(row.createdAt);
   const facts = [
-    ["Документ", `${row.title}, версия ${row.revisionNumber}`],
+    [document?.kind === "change" ? "Промяна" : "Оферта", `${row.title}, версия ${row.revisionNumber}`],
     ["Сума", `${Number(row.total).toFixed(2)} ${row.currency}`],
     ["Решение", decisionReceiptLabels[row.decision]],
     ["Име", row.typedName],
@@ -295,28 +309,147 @@ async function sendDecisionReceipt(decisionId: number) {
   });
 }
 
-export async function disputePaymentAction(formData: FormData) {
-  const data = z.object({ projectPublicId: z.uuid(), receiptId: z.uuid(), reason: z.string().trim().min(5).max(1000) }).parse(Object.fromEntries(formData));
+export async function disputePaymentAction(formData: FormData): Promise<{ error?: string }> {
+  const parsed = z.object({ projectPublicId: z.uuid(), receiptId: z.uuid(), reason: z.string().trim().min(5, "Опиши накратко какво не е вярно.").max(1000) }).safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Невалидни данни." };
+  const data = parsed.data;
   const session = await getPortalSession(data.projectPublicId);
-  if (!session || !session.scope.includes("view")) throw new Error("Клиентската сесия е изтекла.");
-  await getDatabase().transaction(async (tx) => {
-    const [receipt] = await tx.select({ id: projectReceipts.id, amount: projectReceipts.amount, correctionOfId: projectReceipts.correctionOfId }).from(projectReceipts)
-      .where(and(eq(projectReceipts.id, data.receiptId), eq(projectReceipts.projectId, session.projectId), eq(projectReceipts.organizationId, session.organizationId)))
-      .for("update")
-      .limit(1);
-    if (!receipt || Number(receipt.amount) <= 0 || receipt.correctionOfId) throw new Error("Плащането не може да се оспори.");
-    const [correction] = await tx.select({ id: projectReceipts.id }).from(projectReceipts)
-      .where(eq(projectReceipts.correctionOfId, receipt.id)).limit(1);
-    if (correction) throw new Error("Това плащане вече е коригирано.");
-    const [existing] = await tx.select({ id: paymentDisputes.id }).from(paymentDisputes)
-      .where(eq(paymentDisputes.receiptId, receipt.id)).limit(1);
-    if (existing) return;
-    await tx.insert(paymentDisputes).values({ organizationId: session.organizationId, projectId: session.projectId, receiptId: receipt.id, projectContactId: session.contactId, reason: data.reason });
-    const handlers = await tx.select({ userId: organizationMembers.userId }).from(organizationMembers)
-      .leftJoin(projectMembers, and(eq(projectMembers.userId, organizationMembers.userId), eq(projectMembers.projectId, session.projectId)))
-      .where(and(eq(organizationMembers.organizationId, session.organizationId), eq(organizationMembers.status, "active"), or(eq(organizationMembers.role, "owner"), and(sql`'payments.record' = any(${organizationMembers.permissions})`, or(eq(organizationMembers.allProjects, true), eq(projectMembers.projectId, session.projectId))))));
-    await notifyUsers(tx, handlers.map((handler) => handler.userId), { organizationId: session.organizationId, projectId: session.projectId, eventType: "payment_disputed", title: "Клиент оспори плащане", body: data.reason, href: `/app/projects/${session.projectId}` });
-  });
+  if (!session) return { error: "Сесията е изтекла. Отвори отново линка от фирмата." };
+  if (session.projectStatus === "archived") return { error: "Обектът е в архива на фирмата. Свържи се с нея директно." };
+  try {
+    await getDatabase().transaction(async (tx) => {
+      const [receipt] = await tx.select({ id: projectReceipts.id, amount: projectReceipts.amount, correctionOfId: projectReceipts.correctionOfId }).from(projectReceipts)
+        .where(and(eq(projectReceipts.id, data.receiptId), eq(projectReceipts.projectId, session.projectId), eq(projectReceipts.organizationId, session.organizationId)))
+        .for("update")
+        .limit(1);
+      if (!receipt || Number(receipt.amount) <= 0 || receipt.correctionOfId) throw new Error("Плащането не може да се оспори.");
+      const [correction] = await tx.select({ id: projectReceipts.id }).from(projectReceipts)
+        .where(eq(projectReceipts.correctionOfId, receipt.id)).limit(1);
+      if (correction) throw new Error("Това плащане вече е коригирано.");
+      // One open dispute per receipt; after the company answers, the client can dispute again.
+      const [existing] = await tx.select({ id: paymentDisputes.id }).from(paymentDisputes)
+        .where(and(eq(paymentDisputes.receiptId, receipt.id), eq(paymentDisputes.status, "open"))).limit(1);
+      if (existing) return;
+      const [dispute] = await tx.insert(paymentDisputes).values({ organizationId: session.organizationId, projectId: session.projectId, receiptId: receipt.id, projectContactId: session.contactId, reason: data.reason }).returning({ id: paymentDisputes.id });
+      const handlers = await tx.select({ userId: organizationMembers.userId }).from(organizationMembers)
+        .leftJoin(projectMembers, and(eq(projectMembers.userId, organizationMembers.userId), eq(projectMembers.projectId, session.projectId)))
+        .where(and(eq(organizationMembers.organizationId, session.organizationId), eq(organizationMembers.status, "active"), or(eq(organizationMembers.role, "owner"), and(sql`'payments.record' = any(${organizationMembers.permissions})`, or(eq(organizationMembers.allProjects, true), eq(projectMembers.projectId, session.projectId))))));
+      await notifyUsers(tx, handlers.map((handler) => handler.userId), { organizationId: session.organizationId, projectId: session.projectId, eventType: "payment_disputed", title: "Клиент оспори плащане", body: data.reason, href: `/app/projects/${session.projectId}?tab=payments#dispute-${dispute!.id}` });
+    });
+  } catch (cause) {
+    return { error: cause instanceof Error ? cause.message : "Оспорването не беше записано. Опитай отново." };
+  }
   revalidatePath(`/portal/${data.projectPublicId}`);
-  redirect(`/portal/${data.projectPublicId}?payment=disputed`);
+  redirect(`/portal/${data.projectPublicId}?tab=payments&payment=disputed`);
+}
+
+/**
+ * "I paid": the client reports a payment (typically a bank transfer). The company confirms it, which
+ * records the receipt, or answers why it cannot find it. Any contact of the project can report one.
+ */
+export async function claimPaymentAction(formData: FormData): Promise<{ error?: string }> {
+  const parsed = z.object({
+    projectPublicId: z.uuid(),
+    installmentId: z.union([z.literal(""), z.uuid()]).optional(),
+    offerId: z.union([z.literal(""), z.uuid()]).optional(),
+    amount: z.coerce.number().positive("Въведи сумата.").max(999999999),
+    method: z.enum(["cash", "bank", "card", "other"]),
+    paidOn: z.iso.date("Избери дата."),
+    note: z.string().trim().max(500).optional(),
+  }).safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Невалидни данни." };
+  const data = parsed.data;
+  const session = await getPortalSession(data.projectPublicId);
+  if (!session) return { error: "Сесията е изтекла. Отвори отново линка от фирмата." };
+  if (session.projectStatus === "archived") return { error: "Обектът е в архива на фирмата. Свържи се с нея директно." };
+  if (await isOrganizationStaff(session.organizationId)) return { error: "Излез от служебния профил, за да действаш като клиент." };
+  try {
+    await getDatabase().transaction(async (tx) => {
+      let offerId = data.offerId || null;
+      if (data.installmentId) {
+        const [installment] = await tx.select({ offerId: paymentInstallments.offerId }).from(paymentInstallments)
+          .where(and(eq(paymentInstallments.id, data.installmentId), eq(paymentInstallments.projectId, session.projectId))).limit(1);
+        if (!installment) throw new Error("Вноската не е намерена.");
+        offerId = installment.offerId;
+      } else if (offerId) {
+        const [offer] = await tx.select({ id: changeOrders.id }).from(changeOrders)
+          .where(and(eq(changeOrders.id, offerId), eq(changeOrders.projectId, session.projectId), eq(changeOrders.documentKind, "offer"))).limit(1);
+        if (!offer) throw new Error("Офертата не е намерена.");
+      }
+      const [pending] = await tx.select({ total: sql<number>`count(*)::int` }).from(paymentClaims)
+        .where(and(eq(paymentClaims.projectId, session.projectId), eq(paymentClaims.status, "pending")));
+      if ((pending?.total ?? 0) >= 10) throw new Error("Имаш много неразгледани плащания. Изчакай фирмата да ги потвърди.");
+      await tx.insert(paymentClaims).values({
+        organizationId: session.organizationId, projectId: session.projectId, offerId, installmentId: data.installmentId || null,
+        projectContactId: session.contactId, amount: data.amount.toFixed(2), currency: "EUR", method: data.method, paidOn: data.paidOn, note: data.note || null,
+      });
+      await notifyProjectStaff(tx, {
+        organizationId: session.organizationId, projectId: session.projectId, eventType: "payment_claimed",
+        title: `${session.contactName} отбеляза плащане: ${data.amount.toFixed(2)} EUR`,
+        body: data.note || "Провери получената сума и я потвърди.",
+        href: `/app/projects/${session.projectId}?tab=payments`,
+      });
+    });
+  } catch (cause) {
+    return { error: cause instanceof Error ? cause.message : "Плащането не беше отбелязано. Опитай отново." };
+  }
+  revalidatePath(`/portal/${data.projectPublicId}`);
+  revalidatePath(`/app/projects/${session.projectId}`);
+  return {};
+}
+
+/**
+ * The client's answer to "please accept the work": accepted (with their typed name, from a session
+ * whose email they confirmed) or a list of issues for the company to fix.
+ */
+export async function answerAcceptanceAction(formData: FormData): Promise<{ error?: string }> {
+  const parsed = z.object({
+    projectPublicId: z.uuid(),
+    offerId: z.uuid(),
+    answer: z.enum(["accepted", "issues"]),
+    typedName: z.string().trim().max(160).optional(),
+    note: z.string().trim().max(2000).optional(),
+  }).safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Невалидни данни." };
+  const data = parsed.data;
+  if (data.answer === "accepted" && (!data.typedName || data.typedName.length < 2)) return { error: "Въведи името си." };
+  if (data.answer === "issues" && (!data.note || data.note.length < 5)) return { error: "Опиши забележките си." };
+  const session = await getPortalSession(data.projectPublicId);
+  if (!session || session.contactRole !== "approver") return { error: "Само одобряващият може да приеме работата." };
+  if (!session.contactEmailVerifiedAt) return { error: "Първо потвърди имейла си." };
+  if (session.projectStatus !== "active") return { error: "Обектът е приключен. Свържи се с фирмата." };
+  if (await isOrganizationStaff(session.organizationId)) return { error: "Излез от служебния профил, за да действаш като клиент." };
+  const requestHeaders = await headers();
+  try {
+    await getDatabase().transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`acceptance:${data.offerId}`}))`);
+      const [latest] = await tx.select({ kind: offerAcceptances.kind }).from(offerAcceptances)
+        .where(and(eq(offerAcceptances.offerId, data.offerId), eq(offerAcceptances.projectId, session.projectId)))
+        .orderBy(desc(offerAcceptances.createdAt)).limit(1);
+      if (latest?.kind !== "requested") throw new Error("Фирмата още не е поискала приемане, или вече си отговорил.");
+      const [offer] = await tx.select({ title: changeOrderRevisions.title }).from(changeOrders)
+        .innerJoin(changeOrderRevisions, eq(changeOrderRevisions.id, changeOrders.approvedRevisionId))
+        .where(eq(changeOrders.id, data.offerId)).limit(1);
+      await tx.insert(offerAcceptances).values({
+        organizationId: session.organizationId, projectId: session.projectId, offerId: data.offerId, kind: data.answer,
+        note: data.note || null, typedName: data.answer === "accepted" ? data.typedName! : null,
+        actorType: "portal_contact", actorId: session.contactId, ip: clientIp(requestHeaders), userAgent: requestHeaders.get("user-agent"),
+      });
+      await tx.insert(timelineEvents).values({
+        organizationId: session.organizationId, projectId: session.projectId, changeOrderId: data.offerId, actorType: "portal_contact", actorId: session.contactId,
+        eventType: data.answer === "accepted" ? "acceptance_accepted" : "acceptance_issues", visibility: "client",
+        metadata: { typedName: data.typedName || null, note: data.note || null },
+      });
+      await notifyProjectStaff(tx, {
+        organizationId: session.organizationId, projectId: session.projectId, eventType: data.answer === "accepted" ? "acceptance_accepted" : "acceptance_issues",
+        title: data.answer === "accepted" ? `Клиентът прие работата по „${offer?.title ?? ""}“` : `Клиентът има забележки по „${offer?.title ?? ""}“`,
+        body: data.note || null, href: `/app/projects/${session.projectId}?tab=work`,
+      });
+    });
+  } catch (cause) {
+    return { error: cause instanceof Error ? cause.message : "Отговорът не беше записан. Опитай отново." };
+  }
+  revalidatePath(`/portal/${data.projectPublicId}`, "layout");
+  revalidatePath(`/app/projects/${session.projectId}`);
+  return {};
 }

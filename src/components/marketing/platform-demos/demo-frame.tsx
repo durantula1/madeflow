@@ -76,7 +76,7 @@ export function StatusChip({
 }) {
   const tones = {
     wait: "bg-[#fee8a5] text-[#73570d]",
-    ok: "bg-[#d8f2e7] text-[#0b5d4f]",
+    ok: "bg-[#bceba8] text-[#102b38]",
     info: "bg-[#c5e3e5] text-[#17485a]",
     muted: "bg-[#102b38]/8 text-[#52707d]",
   } as const;

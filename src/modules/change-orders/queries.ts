@@ -5,17 +5,23 @@ import { and, asc, desc, eq, exists, ilike, inArray, isNotNull, isNull, or, sql 
 import { getDatabase } from "@/db";
 import {
   changeOrderLineItems,
+  changeOrderPaymentTerms,
   changeOrderRevisions,
+  changeOrderScheduleItems,
   changeOrders,
+  organizations,
   portalDecisions,
   projectContacts,
   projectMembers,
   projects,
+  revisionAbsorbedChanges,
   timelineEvents,
 } from "@/db/schema";
 import { can } from "@/lib/authz/permissions";
 import { seesAllProjects } from "@/lib/authz/project-access";
 import type { TenantContext } from "@/lib/authz/tenant-context";
+import { documentLogo } from "@/modules/organizations/logo";
+import { expireOverdue } from "@/modules/change-orders/reminders";
 
 export async function listChangeOrders(input: {
   context: TenantContext;
@@ -123,16 +129,16 @@ export async function listApprovedOffers(
       title: changeOrderRevisions.title,
     })
     .from(changeOrders)
+    // Titled as approved: a newer version under negotiation may still change.
     .innerJoin(
       changeOrderRevisions,
-      eq(changeOrderRevisions.id, changeOrders.currentRevisionId),
+      eq(changeOrderRevisions.id, changeOrders.approvedRevisionId),
     )
     .where(
       and(
         eq(changeOrders.organizationId, context.organizationId),
         seesAllProjects(context) ? undefined : exists(db.select({ id: projectMembers.projectId }).from(projectMembers).where(and(eq(projectMembers.projectId, changeOrders.projectId), eq(projectMembers.userId, context.userId)))),
         eq(changeOrders.documentKind, "offer"),
-        eq(changeOrderRevisions.status, "approved"),
         projectId ? eq(changeOrders.projectId, projectId) : undefined,
         isNull(changeOrders.archivedAt),
       ),
@@ -143,12 +149,27 @@ export async function listApprovedOffers(
 /** Timeline events shown per page on the document screen. */
 export const TIMELINE_PAGE_SIZE = 30;
 
-export async function getChangeOrder(
+type ChangeOrderHead = { projectId: string; revisionId: number; contactId: string | null; documentKind: "offer" | "change"; approvedRevisionId: number | null };
+
+export async function getChangeOrder<Extra = undefined>(
   organizationId: string,
   changeOrderId: string,
-  /** `eventsBefore`: id of the oldest event already shown; loads the page of events before it (keyset on created_at, id). */
-  options: { eventsBefore?: number } = {},
+  /**
+   * `eventsBefore`: id of the oldest event already shown; loads the page of events before it (keyset on created_at, id).
+   * `extra`: more reads a page needs about the same document; they run in the same parallel round as the details.
+   */
+  options: { eventsBefore?: number; extra?: (head: ChangeOrderHead) => Promise<Extra> } = {},
 ) {
+  const result = await loadChangeOrder(organizationId, changeOrderId, options);
+  // The daily job may not have run yet: a version past its validity is expired, then read again.
+  if (result && (result.revisionStatus === "sent" || result.revisionStatus === "viewed") && result.responseDueAt && result.responseDueAt < new Date()) {
+    await expireOverdue(new Date(), { changeOrderId });
+    return loadChangeOrder(organizationId, changeOrderId, options);
+  }
+  return result;
+}
+
+async function loadChangeOrder<Extra>(organizationId: string, changeOrderId: string, options: { eventsBefore?: number; extra?: (head: ChangeOrderHead) => Promise<Extra> }) {
   const [change] = await getDatabase()
     .select({
       id: changeOrders.id,
@@ -156,11 +177,13 @@ export async function getChangeOrder(
       sequenceNumber: changeOrders.sequenceNumber,
       documentKind: changeOrders.documentKind,
       baselineOfferId: changeOrders.baselineOfferId,
+      approvedRevisionId: changeOrders.approvedRevisionId,
       lifecycleStatus: changeOrders.lifecycleStatus,
       workStatus: changeOrders.workStatus,
       projectId: projects.id,
       projectPublicId: projects.publicId,
       projectName: projects.name,
+      projectStatus: projects.status,
       siteAddress: projects.siteAddress,
       contactId: projectContacts.id,
       contactName: projectContacts.name,
@@ -194,9 +217,14 @@ export async function getChangeOrder(
       frozenAt: changeOrderRevisions.frozenAt,
       contentHash: changeOrderRevisions.contentHash,
       createdAt: changeOrderRevisions.createdAt,
+      revisionLogoPath: changeOrderRevisions.logoStoragePath,
+      organizationName: organizations.name,
+      organizationLogoPath: organizations.logoStoragePath,
+      organizationLogoSize: organizations.logoSize,
     })
     .from(changeOrders)
     .innerJoin(projects, eq(projects.id, changeOrders.projectId))
+    .innerJoin(organizations, eq(organizations.id, changeOrders.organizationId))
     .innerJoin(
       changeOrderRevisions,
       eq(changeOrderRevisions.id, changeOrders.currentRevisionId),
@@ -218,7 +246,9 @@ export async function getChangeOrder(
 
   if (!change) return null;
 
-  const [revisions, eventRows, disputeEvent, decision, lineItems, baselineOffer] = await Promise.all([
+  const isOffer = change.documentKind === "offer";
+  const [extra, revisions, eventRows, disputeEvent, decision, lineItems, baselineOffer, schedule, terms, absorbedChanges] = await Promise.all([
+    options.extra ? options.extra(change) : Promise.resolve(undefined as Extra),
     getDatabase()
       .select()
       .from(changeOrderRevisions)
@@ -264,12 +294,19 @@ export async function getChangeOrder(
         .limit(1)
         .then((rows) => rows[0] ?? null)
       : Promise.resolve(null),
+    listRevisionSchedule(change.revisionId),
+    isOffer ? getDatabase().select().from(changeOrderPaymentTerms).where(eq(changeOrderPaymentTerms.revisionId, change.revisionId)).orderBy(asc(changeOrderPaymentTerms.position)) : Promise.resolve([]),
+    isOffer ? listRevisionAbsorbedChanges(change.revisionId) : Promise.resolve([]),
   ]);
+  // Terms point at schedule lines by key; the schedule was read in the same round.
+  const paymentTerms = withStages(terms, schedule);
 
   const hasOlderEvents = eventRows.length > TIMELINE_PAGE_SIZE;
   // Newest first; the last row is the cursor for "По-стари събития".
   const events = eventRows.slice(0, TIMELINE_PAGE_SIZE);
-  return { ...change, revisions, events, hasOlderEvents, disputeEvent, decision, lineItems, baselineOffer };
+  const { revisionLogoPath, organizationLogoPath, organizationLogoSize, ...rest } = change;
+  const logo = documentLogo({ revisionLogoPath, organizationLogoPath, size: organizationLogoSize });
+  return { ...rest, logo, revisions, events, hasOlderEvents, disputeEvent, decision, lineItems, baselineOffer, schedule, paymentTerms, absorbedChanges, extra };
 }
 
 /** Tab title for an offer or change page, under the same project and draft visibility as the page itself. */
@@ -288,3 +325,54 @@ export async function getChangeOrderTitle(context: TenantContext, changeOrderId:
     .limit(1);
   return change?.title ?? null;
 }
+
+/** The indicative schedule of one version, in order. Empty for changes and for offers without one. */
+export async function listRevisionSchedule(revisionId: number) {
+  return getDatabase()
+    .select({ id: changeOrderScheduleItems.id, position: changeOrderScheduleItems.position, title: changeOrderScheduleItems.title, durationDays: changeOrderScheduleItems.durationDays, lineKey: changeOrderScheduleItems.lineKey })
+    .from(changeOrderScheduleItems)
+    .where(eq(changeOrderScheduleItems.revisionId, revisionId))
+    .orderBy(asc(changeOrderScheduleItems.position));
+}
+
+/** Payment terms of one offer version, in order. Pass `schedule` (even empty) to skip reading it: callers that
+ * already load the schedule map the stages with `withStages`. */
+export async function listRevisionPaymentTerms(revisionId: number, schedule?: Array<{ position: number; title: string; lineKey: string }>) {
+  const [terms, lines] = await Promise.all([
+    getDatabase().select().from(changeOrderPaymentTerms).where(eq(changeOrderPaymentTerms.revisionId, revisionId)).orderBy(asc(changeOrderPaymentTerms.position)),
+    schedule ? Promise.resolve(schedule) : listRevisionSchedule(revisionId),
+  ]);
+  return withStages(terms, lines);
+}
+
+/** Terms with the position and title of the schedule line an "after a stage" term points at. */
+export function withStages(terms: Array<typeof changeOrderPaymentTerms.$inferSelect>, schedule: Array<{ position: number; title: string; lineKey: string }>) {
+  return terms.map((term) => {
+    const stage = term.scheduleLineKey ? schedule.find((line) => line.lineKey === term.scheduleLineKey) : undefined;
+    return { id: term.id, position: term.position, title: term.title, percent: Number(term.percent), dueTrigger: term.dueTrigger, dueOn: term.dueOn, stage: stage?.position ?? null, stageTitle: stage?.title ?? null };
+  });
+}
+
+/** Approved changes an offer version includes (see `revisionAbsorbedChanges`). */
+export async function listRevisionAbsorbedChanges(revisionId: number) {
+  return getDatabase()
+    .select({ id: changeOrders.id, sequenceNumber: changeOrders.sequenceNumber, title: changeOrderRevisions.title, total: changeOrderRevisions.total })
+    .from(revisionAbsorbedChanges)
+    .innerJoin(changeOrders, eq(changeOrders.id, revisionAbsorbedChanges.changeOrderId))
+    .innerJoin(changeOrderRevisions, eq(changeOrderRevisions.id, changeOrders.approvedRevisionId))
+    .where(eq(revisionAbsorbedChanges.revisionId, revisionId))
+    .orderBy(asc(changeOrders.sequenceNumber));
+}
+
+/** Approved changes of an offer that a new version could include: not absorbed yet. */
+export async function listAbsorbableChanges(organizationId: string, offerId: string) {
+  return getDatabase()
+    .select({ id: changeOrders.id, sequenceNumber: changeOrders.sequenceNumber, title: changeOrderRevisions.title, total: changeOrderRevisions.total })
+    .from(changeOrders)
+    .innerJoin(changeOrderRevisions, eq(changeOrderRevisions.id, changeOrders.approvedRevisionId))
+    .where(and(eq(changeOrders.organizationId, organizationId), eq(changeOrders.baselineOfferId, offerId), eq(changeOrders.documentKind, "change"), isNull(changeOrders.absorbedByRevisionId), isNull(changeOrders.archivedAt)))
+    .orderBy(asc(changeOrders.sequenceNumber));
+}
+
+export type RevisionPaymentTerm = Awaited<ReturnType<typeof listRevisionPaymentTerms>>[number];
+export type AbsorbedChange = Awaited<ReturnType<typeof listRevisionAbsorbedChanges>>[number];

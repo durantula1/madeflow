@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { ATTACHMENT_ACCEPT, formatFileSize, uploadAttachment } from "@/components/change-orders/attachment-upload";
+import { startNavigationProgress } from "@/components/workspace/navigation-progress";
 import { cn } from "@/lib/utils";
 
 /**
@@ -106,7 +107,9 @@ export function useUploadStagedFiles(createdId: string | undefined, files: File[
         }
       }
       if (failed) toast.error(`${failed} от ${files.length} файла не се качиха. Добави ги отново от документа.`);
-      router.push(`/app/offers/${createdId}?notice=${notice}`);
+      const href = `/app/offers/${createdId}?notice=${notice}`;
+      startNavigationProgress(href);
+      router.push(href);
     })();
   }, [createdId, files, notice, router]);
 

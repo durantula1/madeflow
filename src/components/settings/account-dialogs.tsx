@@ -1,17 +1,19 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { Download, TriangleAlert } from "lucide-react";
+import { Download, LoaderCircle, TriangleAlert } from "lucide-react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { ActionForm, ActionSubmit } from "@/components/workspace/action-form";
+import { DownloadLink, useDownloading } from "@/components/workspace/download-tray";
 import { cn } from "@/lib/utils";
 import type { AccountDeletionPlan, Blocker } from "@/modules/account/queries";
 import {
-  cancelAccountDeletionAction, leaveOrganizationAction, requestAccountDeletionAction, signOutEverywhereAction,
+  cancelAccountDeletionAction, changeEmailAction, changePasswordAction, leaveOrganizationAction, requestAccountDeletionAction, signOutEverywhereAction,
 } from "@/modules/account/actions";
 
 /** Explains why the button above is disabled and links to the fix, when there is one. */
@@ -27,19 +29,20 @@ function BlockerNote({ blocker }: { blocker: Blocker }) {
   );
 }
 
-/** A plain download link styled as a button; the export route sends the file as an attachment. */
-export function ExportDataLink({ href = "/api/account/export", label = "Изтегли данните (JSON)" }: { href?: string; label?: string }) {
+/** A download link styled as a button; the tray shows while the export is being put together. */
+export function ExportDataLink({ href = "/api/account/export", label = "Изтегли данните (JSON)", fileLabel = "Твоите данни · JSON" }: { href?: string; label?: string; fileLabel?: string }) {
+  const busy = useDownloading(href);
   return (
-    <a href={href} download className={cn(buttonVariants({ variant: "outline" }), "h-10 gap-2")}>
-      <Download className="size-4" /> {label}
-    </a>
+    <DownloadLink href={href} label={fileLabel} className={cn(buttonVariants({ variant: "outline" }), "h-9 gap-2")}>
+      {busy ? <LoaderCircle className="size-4 animate-spin" /> : <Download className="size-4" />} {label}
+    </DownloadLink>
   );
 }
 
 export function SignOutEverywhereDialog() {
   return (
     <DialogTrigger>
-      <Button type="button" variant="outline" className="h-10">Изход от всички устройства</Button>
+      <Button type="button" variant="outline" className="h-9">Излез навсякъде</Button>
       <Dialog>
         <DialogHeader>
           <DialogTitle>Изход от всички устройства?</DialogTitle>
@@ -55,14 +58,14 @@ export function SignOutEverywhereDialog() {
 
 export function LeaveOrganizationDialog({ organizationName, blocker }: { organizationName: string; blocker: Blocker | null }) {
   return (
-    <div>
+    <div className="grid justify-items-start gap-0 @xl:justify-items-end">
       <DialogTrigger>
-        <Button type="button" variant="destructive" className="h-10" isDisabled={!!blocker}>Напусни фирмата</Button>
+        <Button type="button" variant="destructive" className="h-9" isDisabled={!!blocker}>Напусни</Button>
         <Dialog>
           <DialogHeader>
             <DialogTitle>Да напуснеш „{organizationName}“?</DialogTitle>
             <DialogDescription>
-              Губиш достъп до обектите и документите веднага. Собствениците ще получат известие.
+              Губиш достъп до обектите и офертите веднага. Собствениците ще получат известие.
               Профилът ти остава и може да бъдеш поканен отново.
             </DialogDescription>
           </DialogHeader>
@@ -79,24 +82,29 @@ export function LeaveOrganizationDialog({ organizationName, blocker }: { organiz
 export function DeleteAccountDialog({ plan, graceDays }: { plan: AccountDeletionPlan; graceDays: number }) {
   const company = plan.kind === "account_and_company" ? plan.organizationName : null;
   return (
-    <div>
+    <div className="grid justify-items-start gap-0 @xl:justify-items-end">
       <DialogTrigger>
-        <Button type="button" variant="destructive" className="h-10" isDisabled={plan.kind === "blocked"}>
-          {company ? "Изтрий профила и фирмата" : "Изтрий профила"}
-        </Button>
+        <Button type="button" variant="destructive" className="h-9" isDisabled={plan.kind === "blocked"}>Изтрий</Button>
         <Dialog className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{company ? "Изтриване на профила и фирмата" : "Изтриване на профила"}</DialogTitle>
             <DialogDescription>
               {company
-                ? <>Ти си единственият член на „{company}“. Заедно с профила ще изтрием фирмата, всички обекти, документи, плащания и клиентски линкове.</>
+                ? <>Ти си единственият член на „{company}“. Заедно с профила ще изтрием фирмата, всички обекти, оферти, плащания и клиентски линкове.</>
                 : "Ще излезеш от всички устройства."}{" "}
               Изтриването става след {graceDays} дни. Дотогава можеш да влезеш и да го отмениш.
             </DialogDescription>
           </DialogHeader>
+          <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+            <li>Излизаш от всички устройства веднага.</li>
+            {company ? <li>Клиентските линкове спират да работят след изтриването.</li> : <>
+              <li>Изтриваме имейла, телефона и паролата ти.</li>
+              <li>Офертите, които си създал, остават във фирмата. Там ще се показваш като „Изтрит потребител“.</li>
+            </>}
+          </ul>
           {company ? (
             <p className="rounded-xl bg-muted px-3 py-2.5 text-sm">
-              Първо <a href="/api/organization/export" download className="font-medium underline underline-offset-4">изтегли данните на фирмата</a>. Може да ти трябват за счетоводството.
+              Първо <DownloadLink href="/api/organization/export" label="Данните на фирмата · JSON" className="font-medium underline underline-offset-4">изтегли данните на фирмата</DownloadLink>. Може да ти трябват за счетоводството.
             </p>
           ) : null}
           <ActionForm action={requestAccountDeletionAction} success="" redirects className="grid gap-4">
@@ -135,5 +143,58 @@ export function DeletionPendingBanner({ deleteOn, companyName }: { deleteOn: str
         <ActionSubmit variant="outline" className="h-10">Отмени изтриването</ActionSubmit>
       </ActionForm>
     </div>
+  );
+}
+
+/** Opens on "Смени" next to the current email; the change waits for the link in the new inbox. */
+export function ChangeEmailDialog() {
+  const [open, setOpen] = useState(false);
+  return (
+    <DialogTrigger isOpen={open} onOpenChange={setOpen}>
+      <Button type="button" variant="outline" className="h-9">Смени</Button>
+      <Dialog>
+        <DialogHeader>
+          <DialogTitle>Нов имейл за вход</DialogTitle>
+          <DialogDescription>Ще изпратим линк на новия адрес. Смяната важи, след като го отвориш.</DialogDescription>
+        </DialogHeader>
+        <ActionForm action={changeEmailAction} success="Изпратихме линк за потвърждение" onSuccess={() => setOpen(false)} className="grid gap-4">
+          <Field>
+            <FieldLabel htmlFor="profile-email">Нов имейл</FieldLabel>
+            <Input id="profile-email" name="email" type="email" required autoComplete="email" autoFocus className="h-10" />
+          </Field>
+          <ActionSubmit className="h-10">Изпрати линк</ActionSubmit>
+        </ActionForm>
+      </Dialog>
+    </DialogTrigger>
+  );
+}
+
+export function ChangePasswordDialog() {
+  const [open, setOpen] = useState(false);
+  return (
+    <DialogTrigger isOpen={open} onOpenChange={setOpen}>
+      <Button type="button" variant="outline" className="h-9">Смени</Button>
+      <Dialog>
+        <DialogHeader>
+          <DialogTitle>Смяна на паролата</DialogTitle>
+          <DialogDescription>Поне 8 символа. Другите устройства остават влезли, докато не излезеш от тях.</DialogDescription>
+        </DialogHeader>
+        <ActionForm action={changePasswordAction} success="Паролата е сменена" onSuccess={() => setOpen(false)} className="grid gap-4">
+          <Field>
+            <FieldLabel htmlFor="current-password">Текуща парола</FieldLabel>
+            <Input id="current-password" name="currentPassword" type="password" required autoComplete="current-password" autoFocus className="h-10" />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="new-password">Нова парола</FieldLabel>
+            <Input id="new-password" name="password" type="password" required minLength={8} autoComplete="new-password" className="h-10" />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="confirm-password">Повтори новата парола</FieldLabel>
+            <Input id="confirm-password" name="confirmPassword" type="password" required minLength={8} autoComplete="new-password" className="h-10" />
+          </Field>
+          <ActionSubmit className="h-10">Смени паролата</ActionSubmit>
+        </ActionForm>
+      </Dialog>
+    </DialogTrigger>
   );
 }

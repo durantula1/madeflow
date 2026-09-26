@@ -15,13 +15,13 @@ export const metadata: Metadata = { title: "Обекти" };
 export default async function ProjectsPage({ searchParams }: PageProps<"/app/projects">) {
   const [context, params] = await Promise.all([requireTenantContext(), searchParams]);
   const query = typeof params.q === "string" ? params.q.trim().slice(0, 100) : "";
-  const status = params.status === "active" || params.status === "completed" ? params.status : "all";
+  const status = params.status === "active" || params.status === "completed" || params.status === "archived" ? params.status : "all";
   const page = parsePage(params.page);
   const searchState = { q: query, status };
   return (
     <PageShell>
       <PageHeader page="projects" actions={can(context, "projects.create") ? <NewProjectSheet /> : null} />
-      <ListFilters query={query} status={status} statusOptions={[{ value: "all", label: "Всички" }, { value: "active", label: "Активни" }, { value: "completed", label: "Завършени" }]} placeholder="Име, адрес или контакт" />
+      <ListFilters query={query} status={status} statusOptions={[{ value: "all", label: "Всички" }, { value: "active", label: "Активни" }, { value: "completed", label: "Приключени" }, { value: "archived", label: "Архив" }]} placeholder="Име, адрес или контакт" />
       <Suspense key={JSON.stringify({ ...searchState, page })} fallback={<ProjectsTableSkeleton />}>
         <ProjectsTable
           context={context}

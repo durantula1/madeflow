@@ -20,7 +20,7 @@ export async function getDashboardStats(context: TenantContext) {
     .where(and(eq(changeOrders.organizationId, context.organizationId), isNull(changeOrders.archivedAt), inArray(changeOrderRevisions.status, statuses), member(changeOrders.projectId)));
   const overdueMilestones = db.select({ total: sql`count(*)::int` }).from(projectMilestones)
     .innerJoin(projects, eq(projects.id, projectMilestones.projectId))
-    .where(and(eq(projectMilestones.organizationId, context.organizationId), ne(projectMilestones.status, "completed"), lt(projectMilestones.dueOn, sofiaToday()), eq(projects.organizationId, context.organizationId), isNull(projects.archivedAt), member(projects.id)));
+    .where(and(eq(projectMilestones.organizationId, context.organizationId), ne(projectMilestones.status, "completed"), lt(projectMilestones.dueOn, sofiaToday()), eq(projects.organizationId, context.organizationId), eq(projects.status, "active"), member(projects.id)));
   const [row] = await db.select({
     activeProjects: sql<number>`(${activeProjects})`,
     awaitingDecision: sql<number>`(${documents(["sent", "viewed"])})`,

@@ -8,7 +8,7 @@ export default async function SignInPage({ searchParams }: PageProps<"/sign-in">
     <div className="w-full">
       <p className="text-sm font-semibold text-primary">Добре дошъл отново</p>
       <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-        Вход в Pakto
+        Вход
       </h1>
       <p className="mb-8 mt-2 text-muted-foreground">
         Продължи към работното си пространство.

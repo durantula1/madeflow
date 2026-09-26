@@ -32,7 +32,7 @@ export function CatalogPicker({ items, onPick, currency = "EUR" }: { items: Cata
       <SheetContent side="bottom" className="mx-auto flex max-h-[90dvh] w-full max-w-2xl flex-col rounded-t-2xl">
         <SheetHeader>
           <SheetTitle>Добави от каталога</SheetTitle>
-          <SheetDescription>Натисни позиция, за да я добавиш като ред. Можеш да добавиш няколко.</SheetDescription>
+          <SheetDescription>Натисни услуга или материал, за да го добавиш в офертата. Можеш да добавиш няколко.</SheetDescription>
         </SheetHeader>
         <div className="px-4">
           <label className="flex h-11 items-center gap-2 rounded-lg border bg-background px-3">
@@ -46,7 +46,7 @@ export function CatalogPicker({ items, onPick, currency = "EUR" }: { items: Cata
             <EmptyResult
               className="rounded-xl border border-dashed"
               title="Каталогът е празен"
-              description={<><Link href="/app/catalog" className="font-medium text-primary underline">Добави услуги и материали</Link> или запази ред от офертата с иконата до него.</>}
+              description={<><Link href="/app/catalog" className="font-medium text-primary underline">Добави услуги и материали</Link> или ги запазвай от офертата с иконата до тях.</>}
             />
           ) : !groups.length ? (
             <EmptyResult title={`Нищо не съвпада с „${query}“.`} />

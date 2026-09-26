@@ -4,6 +4,7 @@ import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { FileUp, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { ConfirmDialog } from "@/components/workspace/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,11 +25,11 @@ export function CatalogManager({ items, canEdit, currency = "EUR" }: { items: Ca
   }, [items, query]);
 
   async function archive(item: CatalogPick) {
-    if (!window.confirm(`Да премахна ли „${item.name}“ от каталога? Старите оферти не се променят.`)) return;
     const formData = new FormData();
     formData.set("id", item.id);
     const result = await archiveCatalogItemAction(formData);
-    if (result?.error) toast.error(result.error); else toast.success("Премахнато от каталога");
+    if (result?.error) { toast.error(result.error); return false; }
+    toast.success("Премахнато от каталога");
   }
 
   return (
@@ -42,7 +43,7 @@ export function CatalogManager({ items, canEdit, currency = "EUR" }: { items: Ca
         {canEdit ? (
           <div className="grid grid-cols-2 gap-2 sm:flex">
             <ImportSheet />
-            <Button type="button" className="h-11 gap-1.5" onPress={() => setEditing("new")}><Plus className="size-4" /> Нова позиция</Button>
+            <Button type="button" className="h-11 gap-1.5" onPress={() => setEditing("new")}><Plus className="size-4" /> Добави</Button>
           </div>
         ) : null}
       </div>
@@ -64,7 +65,13 @@ export function CatalogManager({ items, canEdit, currency = "EUR" }: { items: Ca
               {canEdit ? (
                 <div className="flex shrink-0 gap-1">
                   <Button type="button" variant="ghost" size="icon" className="size-10" aria-label={`Редактирай ${item.name}`} onPress={() => setEditing(item)}><Pencil /></Button>
-                  <Button type="button" variant="ghost" size="icon" className="size-10 text-destructive" aria-label={`Премахни ${item.name}`} onPress={() => archive(item)}><Trash2 /></Button>
+                  <ConfirmDialog
+                    trigger={<Button type="button" variant="ghost" size="icon" className="size-10 text-destructive" aria-label={`Премахни ${item.name}`}><Trash2 /></Button>}
+                    title="Да премахна ли от каталога?"
+                    description={`„${item.name}“ няма да се предлага в новите оферти. Изпратените оферти не се променят.`}
+                    confirmLabel="Премахни"
+                    onConfirm={() => archive(item)}
+                  />
                 </div>
               ) : null}
             </li>
@@ -108,13 +115,13 @@ function ItemSheet({ item, onClose, currency }: { item: CatalogPick | null; onCl
   const [, save, saving] = useActionState<CatalogState, FormData>(async (previous, formData) => {
     const result = await saveCatalogItemAction(previous, formData);
     if (result.error) toast.error(result.error);
-    else { toast.success(item ? "Позицията е обновена" : "Добавено в каталога"); onClose(); }
+    else { toast.success(item ? "Промените са запазени" : "Добавено в каталога"); onClose(); }
     return result;
   }, {});
   return (
       <SheetContent isOpen onOpenChange={(open) => { if (!open) onClose(); }} side="bottom" className="mx-auto w-full max-w-lg rounded-t-2xl">
         <SheetHeader>
-          <SheetTitle>{item ? "Редакция" : "Нова позиция"}</SheetTitle>
+          <SheetTitle>{item ? "Редакция" : "Нова услуга или материал"}</SheetTitle>
           <SheetDescription>Цената е начална: в офертата можеш да я смениш.</SheetDescription>
         </SheetHeader>
         <form action={save} className="grid gap-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
@@ -145,7 +152,7 @@ function ImportSheet() {
   const [state, run, importing] = useActionState<CatalogState, FormData>(importCatalogAction, {});
   useEffect(() => {
     if (state.error) toast.error(state.error);
-    if (state.imported) toast.success(`Импортирани ${state.imported} позиции`);
+    if (state.imported) toast.success(`Импортирани в каталога: ${state.imported}`);
   }, [state]);
   return (
     <SheetTrigger isOpen={open} onOpenChange={setOpen}>
@@ -153,7 +160,7 @@ function ImportSheet() {
       <SheetContent side="bottom" className="mx-auto w-full max-w-lg rounded-t-2xl">
         <SheetHeader>
           <SheetTitle>Импорт от таблица</SheetTitle>
-          <SheetDescription>По един ред на позиция: <span className="font-mono">име; мярка; цена; категория</span>. Работи и с копиране от Excel. Съществуващо име само обновява цената.</SheetDescription>
+          <SheetDescription>По един ред за всяка услуга или материал: <span className="font-mono">име; мярка; цена; категория</span>. Работи и с копиране от Excel. Съществуващо име само обновява цената.</SheetDescription>
         </SheetHeader>
         <form action={run} className="grid gap-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <Textarea ref={textRef} name="csv" rows={6} placeholder={"Шпакловка стени; м²; 12; Довършителни\nМонтаж на контакт; бр.; 15; Електро"} className="font-mono text-sm" />

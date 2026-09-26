@@ -6,6 +6,7 @@ import { and, eq, gt, isNull, or } from "drizzle-orm";
 import { getDatabase } from "@/db";
 import {
   organizationMembers,
+  organizations,
   portalGrants,
   portalSessions,
   projectContacts,
@@ -26,11 +27,18 @@ export async function getPortalSession(projectPublicId: string) {
       id: portalSessions.id,
       expiresAt: portalSessions.expiresAt,
       grantId: portalGrants.id,
-      scope: portalGrants.scope,
       projectId: projects.id,
       organizationId: projects.organizationId,
       projectPublicId: projects.publicId,
       projectName: projects.name,
+      projectStatus: projects.status,
+      // The portal header comes with the session, so pages need no separate read for it.
+      projectSiteAddress: projects.siteAddress,
+      projectCompletedAt: projects.completedAt,
+      organizationName: organizations.name,
+      organizationLogoPath: organizations.logoStoragePath,
+      organizationLogoSize: organizations.logoSize,
+      organizationCurrency: organizations.defaultCurrency,
       contactId: projectContacts.id,
       contactName: projectContacts.name,
       contactRole: projectContacts.portalRole,
@@ -40,6 +48,7 @@ export async function getPortalSession(projectPublicId: string) {
     .from(portalSessions)
     .innerJoin(portalGrants, eq(portalGrants.id, portalSessions.portalGrantId))
     .innerJoin(projects, eq(projects.id, portalGrants.projectId))
+    .innerJoin(organizations, eq(organizations.id, projects.organizationId))
     .innerJoin(
       projectContacts,
       eq(projectContacts.id, portalGrants.projectContactId),
@@ -52,6 +61,7 @@ export async function getPortalSession(projectPublicId: string) {
         isNull(portalGrants.revokedAt),
         or(isNull(portalGrants.expiresAt), gt(portalGrants.expiresAt, new Date())),
         eq(projects.publicId, projectPublicId),
+        isNull(projectContacts.removedAt),
       ),
     )
     .limit(1);

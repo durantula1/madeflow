@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Toaster } from "@/components/ui/sonner";
+import { authHintScript } from "@/lib/auth/session-hint";
 import { productDefinition } from "@/lib/seo/site";
 import "./globals.css";
 
@@ -33,6 +34,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <link rel="icon" href="/icon.svg" sizes="any" type="image/svg+xml" />
         <link rel="manifest" href="/manifest.webmanifest" />
+        {/* Before the first paint: marks <html data-auth> so the marketing pages show the right buttons (no flash).
+            The root layout is never rendered again on the client, so this runs once per page load; `AuthHint` covers client navigations. */}
+        <script dangerouslySetInnerHTML={{ __html: authHintScript }} />
       </head>
       <body className="flex min-h-full flex-col">
         {children}

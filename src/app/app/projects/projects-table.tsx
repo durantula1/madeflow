@@ -19,7 +19,7 @@ const columns: DataTableColumn[] = [
 
 export async function ProjectsTable({ context, filters, page, searchState }: {
   context: TenantContext;
-  filters: { query: string; status?: "active" | "completed" };
+  filters: { query: string; status?: "active" | "completed" | "archived" };
   page: number;
   searchState: Record<string, string>;
 }) {
@@ -38,7 +38,7 @@ export async function ProjectsTable({ context, filters, page, searchState }: {
       cells: [
         <div key="name"><p className="font-medium">{project.name}</p><p className="text-sm text-muted-foreground">{project.siteAddress}</p></div>,
         project.contactName ?? "Без контакт",
-        <Badge key="status" variant="secondary">{project.status === "active" ? "Активен" : project.status}</Badge>,
+        <Badge key="status" variant={project.status === "active" ? "info-soft" : "secondary"}>{project.status === "active" ? "Активен" : project.status === "completed" ? "Приключен" : "В архива"}</Badge>,
         project.openChanges,
       ],
     }))}

@@ -8,17 +8,21 @@ import { PortalDecisionForm } from "@/components/portal/decision-form";
 import { PortalEmailVerification } from "@/components/portal/email-verification";
 import { maskEmail } from "@/lib/email/send";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AttachmentsPanel } from "@/components/change-orders/attachments-panel";
 import { DocumentBody } from "@/components/change-orders/document-body";
-import { listRevisionAttachments } from "@/modules/change-orders/attachment-data";
 import { documentCode, scheduleLabel, totalLabel, vatLabel } from "@/modules/change-orders/labels";
 import { discountLabel } from "@/modules/change-orders/pricing";
 import { getPortalChange } from "@/modules/change-portal/queries";
 import { markRevisionViewed } from "@/modules/change-portal/viewed";
 import { MessageThread } from "@/components/messages/message-thread";
 import { sendClientMessageAction } from "@/modules/messages/actions";
-import { listThread, markThreadRead, unreadCount } from "@/modules/messages/queries";
+import { markThreadRead } from "@/modules/messages/queries";
+import { after } from "next/server";
+import { DownloadLink } from "@/components/workspace/download-tray";
+import { AcceptancePanel } from "@/components/portal/acceptance-panel";
+import { PortalPayments, PortalSchedule } from "@/components/projects/project-overview";
+import { scopeView } from "@/modules/projects/scope";
 
 const labels: Record<string, string> = {
   sent: "Очаква решение",
@@ -28,6 +32,7 @@ const labels: Record<string, string> = {
   changes_requested: "Поискана промяна",
   superseded: "Обновява се",
   expired: "Изтекла",
+  canceled: "Анулирана",
 };
 const eventLabels: Record<string, string> = {
   revision_sent: "Изпратена за решение",
@@ -37,6 +42,20 @@ const eventLabels: Record<string, string> = {
   decision_declined: "Отказана",
   decision_changes_requested: "Поискана промяна",
   decision_disputed: "Решението е оспорено от клиента",
+  revision_canceled: "Новата версия е оттеглена от фирмата",
+  document_canceled: "Анулирана от фирмата",
+  milestone_added: "Добавен етап",
+  milestone_moved: "Преместен етап",
+  milestone_removed: "Премахнат етап",
+  milestone_status_changed: "Обновен етап",
+  milestones_from_offer_schedule: "Графикът получи дати",
+  payment_received: "Записано плащане",
+  payment_corrected: "Коригирано плащане",
+  payment_assigned: "Плащане отнесено към офертата",
+  payment_plan_created: "Създаден платежен план",
+  acceptance_requested: "Фирмата поиска приемане на работата",
+  acceptance_accepted: "Работата е приета",
+  acceptance_issues: "Изпратени забележки по работата",
 };
 
 function daysUntil(date: Date) {
@@ -54,49 +73,72 @@ export default async function PortalChangePage({
   const data = await getPortalChange(projectPublicId, changeOrderId);
   if (!data) notFound();
   const change = data.change;
-  if (await markRevisionViewed(data.session, change).catch(() => false)) change.status = "viewed";
-  const [thread, unreadAnswers] = await Promise.all([listThread(change.id), unreadCount(change.id, "client")]);
-  if (unreadAnswers) await markThreadRead(change.id, "client");
+  const { thread, unreadAnswers } = data;
+  // Writes that do not change what this page shows happen after the response.
+  const session = data.session;
+  after(async () => {
+    await markRevisionViewed(session, change).catch(() => false);
+    if (unreadAnswers) await markThreadRead(change.id, "client");
+  });
   const daysLeft = change.responseDueAt ? daysUntil(change.responseDueAt) : null;
-  const attachments = change.frozenAt ? await listRevisionAttachments(change.revisionId) : [];
+  const attachments = data.attachments;
   const money = (value: string | number) => Number(value).toFixed(2);
   const isOffer = change.documentKind === "offer";
-  const awaitingDecision = ["sent", "viewed"].includes(change.status) && data.session.contactRole === "approver";
+  const inForce = change.approvedRevisionId && change.approvedRevisionId !== change.revisionId
+    ? data.revisions.find((revision) => revision.id === change.approvedRevisionId)
+    : undefined;
+  const projectActive = data.project.status === "active";
+  const awaitingDecision = projectActive && ["sent", "viewed"].includes(change.status) && data.session.contactRole === "approver";
+  // An offer in force anchors its own work and payments; a change belongs to one offer.
+  const offerState = isOffer ? data.state?.offers.find((offer) => offer.id === change.id) ?? null : null;
+  const parentOffer = !isOffer && change.baselineOfferId ? data.state?.offers.find((offer) => offer.id === change.baselineOfferId) ?? null : null;
+  const agreement = offerState?.inForce && data.state ? scopeView(data.state, change.id) : null;
   const dateTime = (value: Date, dateStyle: "long" | "medium" = "medium") =>
     new Intl.DateTimeFormat("bg-BG", { dateStyle, timeStyle: "short" }).format(value);
 
   const details = (
     <>
-      <DocumentBody document={{ ...change, lineItems: data.lineItems }} />
+      <DocumentBody document={{ ...change, lineItems: data.lineItems, schedule: data.schedule, paymentTerms: data.paymentTerms, absorbedChanges: data.absorbedChanges }} brand={{ name: data.project.organizationName, logo: data.logo }} />
       {attachments.length ? (
         <AttachmentsPanel changeOrderId={change.id} initial={attachments} editable={false} description="Снимки и документи към тази версия. Отвори ги, за да ги видиш в пълен размер." />
       ) : null}
     </>
   );
 
+  const verification = (
+    <PortalEmailVerification
+      projectPublicId={projectPublicId}
+      maskedEmail={data.session.contactEmail ? maskEmail(data.session.contactEmail) : null}
+      hasEmail={!!data.session.contactEmail}
+      verified={!!data.session.contactEmailVerifiedAt}
+    />
+  );
   const decision = awaitingDecision ? (
-    <Card>
+    <Card className="[--card-spacing:--spacing(5)] sm:[--card-spacing:--spacing(6)]">
       <CardHeader>
-        <CardTitle>Твоето решение</CardTitle>
+        <CardTitle className="text-lg">Твоето решение</CardTitle>
+        <CardDescription>
+          {data.session.contactEmailVerifiedAt
+            ? "Три кратки стъпки. Решението се записва към версия " + change.revisionNumber + " и го виждате и двете страни."
+            : "Първо потвърди имейла си — после ще можеш да одобриш, да поискаш промяна или да откажеш."}
+        </CardDescription>
       </CardHeader>
-      <CardContent className={data.session.contactEmailVerifiedAt ? "grid items-start gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]" : "space-y-4"}>
-        <PortalEmailVerification
-          projectPublicId={projectPublicId}
-          maskedEmail={data.session.contactEmail ? maskEmail(data.session.contactEmail) : null}
-          hasEmail={!!data.session.contactEmail}
-          verified={!!data.session.contactEmailVerifiedAt}
-        />
+      <CardContent className="space-y-6">
         {data.session.contactEmailVerifiedAt ? (
-          <PortalDecisionForm
-            projectPublicId={projectPublicId}
-            changeOrderId={change.id}
-            revisionId={change.revisionId}
-            total={change.total}
-            currency={change.currency}
-            revisionNumber={change.revisionNumber}
-            idempotencyKey={randomUUID()}
-          />
-        ) : null}
+          <>
+            <PortalDecisionForm
+              projectPublicId={projectPublicId}
+              changeOrderId={change.id}
+              revisionId={change.revisionId}
+              total={change.total}
+              currency={change.currency}
+              revisionNumber={change.revisionNumber}
+              maskedEmail={data.session.contactEmail ? maskEmail(data.session.contactEmail) : null}
+              idempotencyKey={randomUUID()}
+            />
+            <div className="border-t pt-4">{verification}</div>
+          </>
+        ) : verification}
       </CardContent>
     </Card>
   ) : (
@@ -130,9 +172,9 @@ export default async function PortalChangePage({
         {data.revisions.some((revision) => revision.frozenAt) ? (
           <div className="flex flex-wrap gap-2 border-b pb-4">
             {data.revisions.filter((revision) => revision.frozenAt).map((revision) => (
-              <a key={revision.id} href={`/api/changes/${change.id}/pdf?revision=${revision.id}`} className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium text-primary transition hover:bg-primary/5">
-                <Download className="size-3.5" /> Версия {revision.revisionNumber} · {money(revision.total)} {revision.currency}
-              </a>
+              <DownloadLink key={revision.id} href={`/api/changes/${change.id}/pdf?revision=${revision.id}`} label={`${documentCode(change.documentKind, change.sequenceNumber)} · версия ${revision.revisionNumber} · PDF`} className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium text-primary transition hover:bg-primary/5">
+                <Download className="size-3.5" /> Версия {revision.revisionNumber} · {money(revision.total)} {revision.currency}{revision.id === change.approvedRevisionId ? " · в сила" : ""}
+              </DownloadLink>
             ))}
           </div>
         ) : null}
@@ -193,19 +235,33 @@ export default async function PortalChangePage({
         <PortalHeader
           eyebrow={<>{isOffer ? "Оферта" : "Промяна"} · <span className="font-mono">{documentCode(change.documentKind, change.sequenceNumber)}</span> · версия {change.revisionNumber}</>}
           title={change.title}
-          meta={<>{data.project.organizationName} · {data.project.name}</>}
+          meta={<>
+            {data.project.organizationName} · {data.project.name}
+            {parentOffer ? <> · <Link href={`/portal/${projectPublicId}/changes/${parentOffer.id}`} className="text-white underline underline-offset-4">към {documentCode("offer", parentOffer.sequenceNumber)} · {parentOffer.title}</Link></> : null}
+          </>}
           aside={
             <div className="flex flex-col items-end gap-3">
               <Badge variant={change.status === "approved" ? "default" : "secondary"}>{labels[change.status] ?? change.status}</Badge>
               {change.frozenAt ? (
-                <a href={`/api/changes/${change.id}/pdf?revision=${change.revisionId}`} className="inline-flex h-9 items-center gap-2 rounded-lg border border-sidebar-border bg-white/5 px-3 text-sm font-medium text-sidebar-foreground transition hover:bg-white/10">
+                <DownloadLink href={`/api/changes/${change.id}/pdf?revision=${change.revisionId}`} label={`${documentCode(change.documentKind, change.sequenceNumber)} · версия ${change.revisionNumber} · PDF`} className="inline-flex h-9 items-center gap-2 rounded-lg border border-sidebar-border bg-white/5 px-3 text-sm font-medium text-sidebar-foreground transition hover:bg-white/10">
                   <Download className="size-4" /> <span className="hidden sm:inline">Свали</span> PDF
-                </a>
+                </DownloadLink>
               ) : null}
             </div>
           }
         />
       </div>
+      {offerState?.acceptance ? (
+        <div className="mt-4">
+          <AcceptancePanel projectPublicId={projectPublicId} offerId={change.id} code={documentCode("offer", change.sequenceNumber)} signerName={data.session.contactName} acceptance={offerState.acceptance} organizationName={data.project.organizationName} canAnswer={projectActive && data.session.contactRole === "approver" && !!data.session.contactEmailVerifiedAt} />
+        </div>
+      ) : null}
+      {change.status === "canceled" ? (
+        <div role="status" className="mt-4 rounded-xl border bg-card p-4 text-sm">
+          <p className="font-semibold">{isOffer ? "Офертата е анулирана" : "Промяната е анулирана"}</p>
+          <p className="mt-1 text-muted-foreground">Фирмата я анулира и тя вече не чака решение.</p>
+        </div>
+      ) : null}
       {daysLeft !== null && ["sent", "viewed"].includes(change.status) ? (
         <div role="status" className={`mt-4 flex items-center gap-2 rounded-xl border p-3 text-sm ${daysLeft <= 2 ? "border-amber-500/40 bg-amber-500/10" : "bg-card"}`}>
           <CalendarClock className="size-4 shrink-0 text-primary" />
@@ -222,6 +278,16 @@ export default async function PortalChangePage({
         <div role="status" className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
           <p className="font-semibold">Фирмата обновява {isOffer ? "тази оферта" : "тази промяна"}</p>
           <p className="mt-1 text-muted-foreground">Версия {change.revisionNumber} е оттеглена за корекция. Ще получиш имейл, когато новата версия е готова за решение.</p>
+        </div>
+      ) : null}
+      {inForce ? (
+        <div role="status" className="mt-4 rounded-xl border bg-card p-4 text-sm">
+          <p className="font-semibold">В сила е одобрената версия {inForce.revisionNumber} · {money(inForce.total)} {inForce.currency}</p>
+          <p className="mt-1 text-muted-foreground">
+            {["sent", "viewed"].includes(change.status)
+              ? `Версия ${change.revisionNumber} е предложение за промяна на договореното. Ако я одобриш, тя заменя версия ${inForce.revisionNumber}. Ако я откажеш, остава версия ${inForce.revisionNumber}.`
+              : `Версия ${change.revisionNumber} не е одобрена, затова договореното по версия ${inForce.revisionNumber} не се променя.`}
+          </p>
         </div>
       ) : null}
       {data.diff ? (
@@ -241,6 +307,13 @@ export default async function PortalChangePage({
           history={history}
           summary={summary}
           pending={awaitingDecision}
+          inForce={!!agreement}
+          work={agreement ? (
+            <>
+              <PortalSchedule view={agreement} />
+              <PortalPayments view={agreement} portalPublicId={projectPublicId} claims={data.claims.filter((claim) => claim.offerId === change.id)} canAct={data.project.status !== "archived"} />
+            </>
+          ) : undefined}
           unreadAnswers={unreadAnswers}
           questions={
             <MessageThread

@@ -21,7 +21,7 @@ export const PERMISSION_GROUPS: { label: string; items: { key: Permission; label
     ],
   },
   {
-    label: "Документи",
+    label: "Оферти",
     items: [
       { key: "offers.edit", label: "Прави оферти", description: "Създава и редактира оферти." },
       { key: "changes.draft", label: "Подготвя промени", description: "Чернови на допълнителна работа по обекта." },

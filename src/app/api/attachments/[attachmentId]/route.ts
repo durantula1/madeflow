@@ -31,7 +31,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/attac
   }
   if (!authorized && attachment.frozenAt) {
     const portal = await getPortalSession(attachment.projectPublicId);
-    authorized = !!portal && portal.projectId === attachment.projectId && portal.scope.includes("view");
+    authorized = !!portal && portal.projectId === attachment.projectId;
   }
   if (!authorized) return notFound();
 

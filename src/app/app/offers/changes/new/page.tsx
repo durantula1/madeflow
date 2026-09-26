@@ -15,7 +15,7 @@ export const metadata: Metadata = { title: "Нова промяна" };
 export default async function NewChangePage({
   searchParams,
 }: PageProps<"/app/offers/changes/new">) {
-  const [{ projectId }, context] = await Promise.all([
+  const [{ projectId, offerId }, context] = await Promise.all([
     searchParams,
     requireTenantContext(),
   ]);
@@ -40,6 +40,7 @@ export default async function NewChangePage({
           <QuickChangeForm
             defaultProject={defaultProject}
             defaultOffers={defaultOffers}
+            defaultOfferId={typeof offerId === "string" ? offerId : undefined}
             draftKey={typeof projectId === "string" ? projectId : undefined}
             defaultTaxRate={organization?.defaultTaxRate ?? "20.00"}
           />

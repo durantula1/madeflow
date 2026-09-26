@@ -20,8 +20,7 @@ const labels: Record<string, string> = {
   "/app/guide": "Как работи",
   "/app/settings": "Настройки",
   "/app/settings/notifications": "Известия",
-  "/app/settings/security": "Сигурност",
-  "/app/settings/privacy": "Данни и поверителност",
+  "/app/settings/privacy": "Данни и акаунт",
   "/app/settings/organization": "Фирма",
 };
 

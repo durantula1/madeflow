@@ -17,6 +17,7 @@ const badgeVariants = cva(
         "success-soft": "bg-tile-mint text-tile-mint-foreground",
         "warning-soft": "bg-tile-sand text-tile-sand-foreground",
         "danger-soft": "bg-tile-coral text-tile-coral-foreground",
+        "info-soft": "bg-tile-blue text-tile-blue-foreground",
         outline:
           "border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
         ghost:

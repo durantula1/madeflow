@@ -4,14 +4,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { cn } from "@/lib/utils";
 
 /** One titled block of a settings page. `danger` marks irreversible actions. */
-export function SettingsSection({ title, description, danger = false, children }: {
+export function SettingsSection({ id, title, description, danger = false, children }: {
+  id?: string;
   title: string;
   description?: ReactNode;
   danger?: boolean;
   children: ReactNode;
 }) {
   return (
-    <Card className={cn(danger && "ring-destructive/30")}>
+    <Card id={id} className={cn("scroll-mt-20", danger && "ring-destructive/30")}>
       <CardHeader>
         <CardTitle className={cn(danger && "text-destructive")}>{title}</CardTitle>
         {description ? <CardDescription>{description}</CardDescription> : null}

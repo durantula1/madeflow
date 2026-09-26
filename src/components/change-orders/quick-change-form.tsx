@@ -44,11 +44,14 @@ const scheduleOptions = [
 export function QuickChangeForm({
   defaultProject,
   defaultOffers,
+  defaultOfferId,
   draftKey,
   defaultTaxRate,
 }: {
   defaultProject?: ProjectOption | null;
   defaultOffers: OfferOption[];
+  /** The offer the change is for, when opened from it (`?offerId=`). */
+  defaultOfferId?: string;
   /** Raw `?projectId=` from the URL; scopes the localStorage draft. */
   draftKey?: string;
   defaultTaxRate: string;
@@ -197,7 +200,7 @@ export function QuickChangeForm({
             Одобрена оферта
           </label>
           <Select
-            key={projectId}
+            key={`${projectId}-${visibleOffers.length}`}
             name="baselineOfferId"
             placeholder={
               !projectId
@@ -208,6 +211,8 @@ export function QuickChangeForm({
             }
             isRequired
             isDisabled={!visibleOffers.length}
+            // Preselected when opened from an offer, or when the project has just one.
+            defaultSelectedKey={visibleOffers.find((offer) => offer.id === defaultOfferId)?.id ?? (visibleOffers.length === 1 ? visibleOffers[0]!.id : undefined)}
             className="w-full"
           >
             <SelectTrigger id="baselineOfferId" className="h-12 text-base">

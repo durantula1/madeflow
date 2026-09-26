@@ -12,6 +12,6 @@ export async function getEmailPreferences(userId: string, organizationId: string
     .where(and(eq(notificationPreferences.userId, userId), eq(notificationPreferences.organizationId, organizationId)));
   const byEvent = new Map(saved.map((row) => [row.eventType, row.email]));
   return (Object.keys(emailEvents) as EmailEventType[]).map((eventType) => ({
-    eventType, label: emailEvents[eventType].label, email: byEvent.get(eventType) ?? emailEvents[eventType].emailByDefault,
+    eventType, label: emailEvents[eventType].label, group: emailEvents[eventType].group, email: byEvent.get(eventType) ?? emailEvents[eventType].emailByDefault,
   }));
 }

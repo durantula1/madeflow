@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { EyeOff, Eye, FileLock2, KeyRound, Signature, Smartphone } from "lucide-react";
 
 import { DocumentStatusBadge } from "@/components/change-orders/document-status-badge";
@@ -9,7 +10,7 @@ import { PageShell } from "@/components/workspace/page/page-shell";
 const promises = [
   { icon: FileLock2, title: "Изпратеното не се променя", text: "Всяка изпратена версия се „замразява“. Поправка значи нова версия, а старата остава." },
   { icon: Smartphone, title: "Клиентът решава от телефона", text: "Без регистрация и парола: линк, код на имейла и подпис с пръст." },
-  { icon: Signature, title: "Всяко „да“ има доказателство", text: "Име, подпис, час, имейл и PDF, които и двете страни пазят." },
+  { icon: Signature, title: "Всяко „да“ има история", text: "Име, подпис, час, имейл и PDF, които и двете страни пазят." },
 ];
 
 const statuses: Array<{ status: string; text: string }> = [
@@ -71,6 +72,11 @@ export default function GuidePage() {
           </div>
         ))}
       </section>
+
+      <p className="text-sm text-muted-foreground">
+        Как се кани екип, какви са правата, как се записват плащания и други въпроси:{" "}
+        <Link href="/faq" className="font-medium text-primary underline-offset-4 hover:underline">Често задавани въпроси</Link>
+      </p>
     </PageShell>
   );
 }

@@ -1,5 +1,5 @@
-import { SettingsPageSkeleton } from "./settings-skeleton";
+import { ProfileSettingsSkeleton } from "./settings-skeleton";
 
-export default function SettingsLoading() {
-  return <SettingsPageSkeleton />;
+export default function Loading() {
+  return <ProfileSettingsSkeleton />;
 }

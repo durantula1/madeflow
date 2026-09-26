@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { sendChangeOrderAction } from "@/modules/change-orders/actions";
 import { discountLabel } from "@/modules/change-orders/pricing";
 import {
+  formatDay,
   scheduleLabel,
   totalLabel,
   vatLabel,
@@ -74,7 +75,7 @@ function Step({
           aria-hidden="true"
           className={cn(
             "absolute top-5 left-[0.4375rem] h-[calc(100%-1rem)] w-px lg:top-[0.6875rem] lg:left-5 lg:h-px lg:w-[calc(100%-1.5rem)]",
-            state === "done" ? "bg-tile-mint-foreground/40" : "bg-border",
+            state === "done" ? "bg-brand-green" : "bg-border",
           )}
         />
       )}
@@ -82,8 +83,9 @@ function Step({
         aria-hidden="true"
         className={cn(
           "relative mt-1 grid size-3.5 shrink-0 place-items-center rounded-full border-2",
+          // A hairline of the foreground keeps the light green visible on the cream card.
           state === "done" &&
-            "border-tile-mint-foreground bg-tile-mint-foreground",
+            "border-brand-green bg-brand-green ring-1 ring-tile-mint-foreground/20",
           state === "current" && "border-primary bg-card",
           state === "pending" && "border-border bg-card",
           state === "alert" &&
@@ -119,6 +121,7 @@ export function DocumentStatusCard({
   canSend,
   canEdit,
   canDraftChange,
+  addStageHref = null,
 }: {
   change: Document;
   path: string;
@@ -126,6 +129,8 @@ export function DocumentStatusCard({
   canSend: boolean;
   canEdit: boolean;
   canDraftChange: boolean;
+  /** For an approved change nobody has scheduled yet: opens the stage dialog on the project. */
+  addStageHref?: string | null;
 }) {
   const status = change.revisionStatus;
   const awaiting = status === "sent" || status === "viewed";
@@ -133,7 +138,7 @@ export function DocumentStatusCard({
     status === "expired" ||
     status === "declined" ||
     status === "changes_requested";
-  const editHref = `${path}?mode=edit`;
+  const editHref = `${path}/edit`;
   const decision = change.decision;
   const decisionState: StepState = decision
     ? decision.decision === "approved"
@@ -151,6 +156,7 @@ export function DocumentStatusCard({
       <ActionForm
         action={sendChangeOrderAction}
         success="Документът е изпратен"
+        redirects
       >
         <input type="hidden" name="changeOrderId" value={change.id} />
         <ActionSubmit className="h-10 w-full gap-2 whitespace-nowrap lg:h-9 lg:w-auto">
@@ -183,14 +189,26 @@ export function DocumentStatusCard({
   ) {
     primary = (
       <Link
-        href={`/app/offers/changes/new?projectId=${change.projectId}`}
+        href={`/app/offers/changes/new?projectId=${change.projectId}&offerId=${change.id}`}
         className={primaryClassName}
       >
         <Plus className="size-4" /> Нова промяна
       </Link>
     );
+  } else if (status === "approved" && addStageHref) {
+    primary = (
+      <Link href={addStageHref} className={primaryClassName}>
+        <CalendarClock className="size-4" /> Добави етап
+      </Link>
+    );
   }
-  const showEdit = canEdit && !needsRework && status !== "draft";
+  // An approved offer is renegotiated from the "Още" menu; here it only takes changes.
+  const showEdit = canEdit && !needsRework && status !== "approved";
+  // A newer version of an approved offer is being negotiated; the approved one is still what applies.
+  const inForce =
+    change.approvedRevisionId && change.approvedRevisionId !== change.revisionId
+      ? change.revisions.find((revision) => revision.id === change.approvedRevisionId)
+      : undefined;
 
   return (
     <Card size="sm">
@@ -212,6 +230,17 @@ export function DocumentStatusCard({
             </p>
             <p className="mt-1 text-xs opacity-80">
               {dateTime(change.disputeEvent.createdAt)}
+            </p>
+          </div>
+        ) : null}
+        {inForce ? (
+          <div role="status" className="rounded-lg bg-muted p-3 text-sm">
+            <p className="font-medium">
+              В сила е одобрената версия {inForce.revisionNumber} · {money(inForce.total)} {inForce.currency}
+              {inForce.agreedDeadline ? ` · срок ${formatDay(inForce.agreedDeadline)}` : ""}
+            </p>
+            <p className="mt-1 text-muted-foreground">
+              Версия {change.revisionNumber} влиза в сила, след като клиентът я одобри. Дотогава обектът се води по версия {inForce.revisionNumber}.
             </p>
           </div>
         ) : null}
@@ -276,7 +305,7 @@ export function DocumentStatusCard({
               {primary}
               {showEdit ? (
                 <Link href={editHref} className={secondaryClassName}>
-                  <PencilLine className="size-4" /> Коригирай
+                  <PencilLine className="size-4" /> {status === "draft" ? "Редактирай" : "Коригирай"}
                 </Link>
               ) : null}
               {portalUrl && change.frozenAt ? (
@@ -299,10 +328,11 @@ export function DocumentStatusCard({
 /** The numbers and people behind the document; below the document on phones, beside it on desktop. */
 export function DocumentFacts({
   change,
-  signatureSrc,
+  signature,
 }: {
   change: Document;
-  signatureSrc: string | null;
+  /** The drawn signature; loaded from storage behind its own Suspense so it never holds the page. */
+  signature?: ReactNode;
 }) {
   const discount = Number(change.discountAmount ?? 0);
   const decision = change.decision;
@@ -401,14 +431,7 @@ export function DocumentFacts({
                 ? maskEmail(decision.verifiedEmail)
                 : "— (старо решение без код)"}
             </p>
-            {signatureSrc ? (
-              // eslint-disable-next-line @next/next/no-img-element -- inline data URL from private storage
-              <img
-                src={signatureSrc}
-                alt={`Подпис на ${decision.typedName}`}
-                className="h-20 w-full rounded-lg border bg-white object-contain p-2"
-              />
-            ) : null}
+            {signature}
             <details className="text-xs text-muted-foreground">
               <summary className="cursor-pointer select-none">
                 Технически детайли

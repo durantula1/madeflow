@@ -40,8 +40,8 @@ export function PortalEmailVerification({ projectPublicId, maskedEmail, hasEmail
       );
     }
     return (
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4 text-sm">
-        <p className="flex items-center gap-2"><ShieldCheck className="size-4 text-primary" /> Имейлът е потвърден · кодовете идват на {maskedEmail}</p>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <p className="flex items-center gap-1.5"><ShieldCheck className="size-3.5 text-primary" /> Имейлът е потвърден · кодовете идват на {maskedEmail}</p>
         {changeButton}
       </div>
     );
@@ -86,7 +86,7 @@ export function PortalEmailVerification({ projectPublicId, maskedEmail, hasEmail
       <p className="flex items-center gap-2 font-medium"><ShieldCheck className="size-4 text-primary" /> Потвърди имейла си</p>
       <p className="text-sm leading-6 text-muted-foreground">
         {hasEmail
-          ? `Преди да вземеш решение, ще ти изпратим код до ${maskedEmail}. Само ти ще можеш да одобряваш или отказваш документи — фирмата няма достъп до кода.`
+          ? `Преди да вземеш решение, ще ти изпратим код до ${maskedEmail}. Само ти ще можеш да одобряваш или отказваш оферти — фирмата няма достъп до кода.`
           : "Фирмата не е посочила имейл. Въведи своя — на него ще получаваш кодовете за решения и разписките."}
       </p>
       {hasEmail ? null : <Input name="email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} className="h-11 bg-background" />}

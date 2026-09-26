@@ -15,6 +15,7 @@ import type { OfferFormInitial } from "@/components/change-orders/offer-form";
 import { requireProjectCapability } from "@/lib/authz/project-access";
 import { documentCode } from "@/modules/change-orders/labels";
 import { getOfferCopy, getTemplate, listCatalog, listTemplates } from "@/modules/catalog/queries";
+import { listRevisionPaymentTerms } from "@/modules/change-orders/queries";
 
 const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
@@ -45,10 +46,12 @@ export default async function NewOfferPage({
   ]);
   // A copy is only offered from a project the person can see.
   const copyAllowed = copy ? await requireProjectCapability(context, copy.projectId, "view").then(() => true, () => false) : false;
+  // A copy keeps the payment terms too; dates of "on a date" terms are the old ones and should be checked.
+  const copyTerms = copy && copyAllowed ? await listRevisionPaymentTerms(copy.revisionId) : [];
   const initial: OfferFormInitial | null = template
     ? { source: `шаблон „${template.name}“`, title: template.title, description: template.description, taxRate: template.taxRate, lines: template.lines }
     : copy && copyAllowed
-      ? { source: `копие на ${documentCode("offer", copy.sequenceNumber)} · ${copy.title}`, title: copy.title, description: copy.description, taxRate: copy.taxRate, lines: copy.lines }
+      ? { source: `копие на ${documentCode("offer", copy.sequenceNumber)} · ${copy.title}`, title: copy.title, description: copy.description, taxRate: copy.taxRate, lines: copy.lines, schedule: copy.schedule, paymentTerms: copyTerms }
       : null;
   return (
     <PageShell>
@@ -62,7 +65,7 @@ export default async function NewOfferPage({
                 {templates.map((item) => (
                   <Link key={item.id} href={`/app/offers/new?${new URLSearchParams({ template: item.id, ...(typeof projectId === "string" ? { projectId } : {}) })}`} className="flex min-h-11 shrink-0 flex-col justify-center rounded-xl border bg-card px-3 py-2 text-sm hover:border-primary/50">
                     <span className="font-medium">{item.name}</span>
-                    <span className="text-xs text-muted-foreground">{item.lines.length} {item.lines.length === 1 ? "ред" : "реда"}</span>
+                    <span className="text-xs text-muted-foreground">{item.lines.length === 1 ? "1 услуга или материал" : `${item.lines.length} услуги и материали`}</span>
                   </Link>
                 ))}
               </div>

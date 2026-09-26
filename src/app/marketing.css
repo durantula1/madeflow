@@ -211,17 +211,13 @@
     #102b38;
 }
 
-.mf-cert-stage {
-  perspective: 1400px;
+.mf-fade-b {
+  mask-image: linear-gradient(to bottom, #000 72%, transparent);
 }
 
-.mf-cert {
-  transform-style: preserve-3d;
-  will-change: transform;
-}
-
-.mf-faq summary::-webkit-details-marker {
-  display: none;
+.mf-security-title,
+.mf-updates-title {
+  font-size: clamp(3.2rem, 6vw, 6.6rem);
 }
 
 .mf-cta-title {
@@ -389,7 +385,7 @@
   }
 }
 
-/* Signed-in vs visitor buttons; <html data-auth> is set before paint by the page's inline script. */
+/* Signed-in vs visitor buttons; <html data-auth> is set before paint by the root layout's inline script. */
 html:not([data-auth="in"]) .mf-when-in,
 html[data-auth="in"] .mf-when-out {
   display: none !important;

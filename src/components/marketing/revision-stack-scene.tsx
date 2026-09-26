@@ -168,7 +168,7 @@ function drawSheet(spec: SheetSpec) {
     const y = 905 + index * 92;
     ctx.beginPath();
     ctx.arc(115, y - 10, 22, 0, Math.PI * 2);
-    ctx.fillStyle = "#d8f2e7";
+    ctx.fillStyle = "#dcf3d1";
     ctx.fill();
     text(ctx, "✓", 115, y, `900 26px ${FONT}`, "#16916d", "center");
     text(ctx, line, 160, y, `700 34px ${FONT}`, INK);
@@ -225,6 +225,27 @@ function drawSeal() {
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 8;
   return texture;
+}
+
+const CAMERA_FOV = 36;
+const CAMERA_Z = 9.2;
+// Widest the fanned stack reaches from the view centre (v1's left edge when the pointer
+// swings it outward), plus a margin, measured at the sheets' depth.
+const STACK_HALF_WIDTH = 3;
+
+/** Pull the camera back in tall, narrow containers so the oldest sheet is never cut off. */
+function FitCamera() {
+  useFrame(({ camera, size }) => {
+    if (!size.width || !size.height) return;
+    const halfTan = Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2));
+    const z = Math.max(
+      CAMERA_Z,
+      STACK_HALF_WIDTH / (halfTan * (size.width / size.height)),
+    );
+    if (camera.position.z !== z) camera.position.z = z;
+  });
+
+  return null;
 }
 
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
@@ -389,7 +410,7 @@ export default function RevisionStackScene({
       aria-hidden="true"
       dpr={[1, 1.5]}
       frameloop={active ? "always" : "never"}
-      camera={{ position: [0, 0, 9.2], fov: 36 }}
+      camera={{ position: [0, 0, CAMERA_Z], fov: CAMERA_FOV }}
       gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
       onCreated={() => onReady()}
       style={{ pointerEvents: "none" }}
@@ -401,6 +422,7 @@ export default function RevisionStackScene({
         intensity={0.45}
         color="#c5e3e5"
       />
+      <FitCamera />
       <Stack pointer={pointer} />
     </Canvas>
   );

@@ -10,12 +10,16 @@ export function NavLink({
   label,
   icon,
   variant = "sidebar",
+  badge,
 }: {
   href: string;
   label: string;
   icon: ReactNode;
   variant?: "sidebar" | "tab";
+  /** Rendered on the icon's corner, e.g. an unread count. */
+  badge?: ReactNode;
 }) {
+  const iconWithBadge = badge ? <span className="relative inline-flex">{icon}{badge}</span> : icon;
   const pathname = usePathname();
   const active = href === "/app" ? pathname === href : pathname.startsWith(href);
   if (variant === "tab") {
@@ -31,7 +35,7 @@ export function NavLink({
             : "text-sidebar-foreground/65 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
         )}
       >
-        {icon}
+        {iconWithBadge}
         <span className="max-w-full truncate text-3xs font-medium">{label}</span>
         <NavPending />
       </Link>
@@ -50,7 +54,7 @@ export function NavLink({
           : "text-sidebar-foreground/65 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
       )}
     >
-      {icon}
+      {iconWithBadge}
       <span className="min-w-0 flex-1 truncate lg:group-data-[sidebar=collapsed]/shell:sr-only">{label}</span>
       <NavPending />
     </Link>

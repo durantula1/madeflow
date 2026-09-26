@@ -4,6 +4,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import { Skeleton } from "@/components/ui/skeleton";
+import { startNavigationProgress } from "@/components/workspace/navigation-progress";
 import { tableSlotClassName } from "@/components/workspace/page/page-shell";
 import { cn } from "@/lib/utils";
 
@@ -13,8 +14,11 @@ export type DataTableColumn = {
   className?: string;
   /** Placeholder shape while loading: `stack` is a title with a subtitle line, `action` a button. */
   skeleton?: "text" | "stack" | "badge" | "action" | "none";
-  /** On phones, show this cell as the card's title (implied for `stack` columns and header-less columns). */
-  mobile?: "primary";
+  /**
+   * On phones, `primary` shows this cell as the card's title (implied for `stack` columns and
+   * header-less columns); `actions` puts it last, right-aligned, without a label.
+   */
+  mobile?: "primary" | "actions";
 };
 
 export type DataTableDensity = "default" | "compact";
@@ -37,7 +41,10 @@ const mobileRowClassName = "max-sm:flex max-sm:flex-col max-sm:gap-2 max-sm:px-4
 const mobileCellClassName = "max-sm:flex max-sm:min-h-6 max-sm:items-center max-sm:justify-between max-sm:gap-4 max-sm:p-0 max-sm:text-right max-sm:before:shrink-0 max-sm:before:text-left max-sm:before:text-xs max-sm:before:font-normal max-sm:before:text-muted-foreground max-sm:before:content-[attr(data-label)]";
 const mobilePrimaryCellClassName = "max-sm:order-first max-sm:block max-sm:p-0 max-sm:pb-1 max-sm:text-left";
 
+const mobileActionsCellClassName = "max-sm:order-last max-sm:flex max-sm:justify-end max-sm:p-0 max-sm:empty:hidden";
+
 function mobileCell(column?: DataTableColumn) {
+  if (column?.mobile === "actions") return mobileActionsCellClassName;
   return column?.mobile === "primary" || column?.skeleton === "stack" || !column?.header ? mobilePrimaryCellClassName : mobileCellClassName;
 }
 
@@ -80,7 +87,7 @@ export function DataTable({
 }: {
   label: string;
   columns: DataTableColumn[];
-  rows: { id: string; href?: string; cells: ReactNode[] }[];
+  rows: { id: string; href?: string; className?: string; cells: ReactNode[] }[];
   density?: DataTableDensity;
   className?: string;
   footer?: ReactNode;
@@ -88,7 +95,7 @@ export function DataTable({
   return (
     <TableFrame label={label} columns={columns} density={density} className={className} footer={footer}>
       {rows.map((row) => (
-        <DataTableRow key={row.id} href={row.href}>
+        <DataTableRow key={row.id} href={row.href} className={row.className}>
           {row.cells.map((cell, index) => (
             <td key={columns[index]?.id ?? index} data-label={columns[index]?.header} className={cn(cellClassNames[density], columns[index]?.className, mobileCell(columns[index]))}>
               {cell}
@@ -105,7 +112,7 @@ export function DataTable({
  * like a link would: once visible and again on hover/touch. That way the target's
  * `loading.tsx` is already on the client and the skeleton paints on click.
  */
-function DataTableRow({ href, children }: { href?: string; children: ReactNode }) {
+function DataTableRow({ href, className, children }: { href?: string; className?: string; children: ReactNode }) {
   const router = useRouter();
   const ref = useRef<HTMLTableRowElement>(null);
 
@@ -125,13 +132,14 @@ function DataTableRow({ href, children }: { href?: string; children: ReactNode }
   return (
     <tr
       ref={ref}
-      className={cn("border-b last:border-0 hover:bg-muted/50", mobileRowClassName, href && "cursor-pointer")}
+      className={cn("border-b last:border-0 hover:bg-muted/50", mobileRowClassName, href && "cursor-pointer", className)}
       onPointerEnter={prefetch}
       onTouchStart={prefetch}
       onClick={(event) => {
         if (!href) return;
         const target = event.target as HTMLElement;
         if (target.closest("a, button, input, select, textarea, label")) return;
+        startNavigationProgress(href);
         router.push(href);
       }}
     >

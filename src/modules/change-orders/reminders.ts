@@ -3,10 +3,11 @@ import "server-only";
 import { and, eq, gt, inArray, isNull, lt, lte } from "drizzle-orm";
 
 import { getDatabase } from "@/db";
-import { changeOrderRevisions, changeOrders, organizations, projectContacts, timelineEvents } from "@/db/schema";
+import { changeOrderRevisions, changeOrders, organizations, projectContacts, projects, timelineEvents } from "@/db/schema";
 import { escapeHtml, sendEmail } from "@/lib/email/send";
 import { getActivePortalLink } from "@/modules/change-portal/links";
 import { notifyProjectStaff } from "@/modules/notifications/staff";
+import { emailClient, sendClientDigests } from "@/modules/notifications/client";
 
 const DAY = 86_400_000;
 /** A client who has not decided this long after sending gets one gentle reminder. */
@@ -31,14 +32,15 @@ const pendingColumns = {
 function pendingDocuments() {
   return getDatabase().select(pendingColumns).from(changeOrderRevisions)
     .innerJoin(changeOrders, eq(changeOrders.currentRevisionId, changeOrderRevisions.id))
-    .innerJoin(organizations, eq(organizations.id, changeOrders.organizationId));
+    .innerJoin(organizations, eq(organizations.id, changeOrders.organizationId))
+    .innerJoin(projects, eq(projects.id, changeOrders.projectId));
 }
 
 /** Emails the primary approver; returns false when there is no one (or no link) to write to. */
 export async function emailClientReminder(document: Pending, reason: "nudge" | "expiring") {
   const [contact] = await getDatabase().select({ id: projectContacts.id, name: projectContacts.name, email: projectContacts.email })
     .from(projectContacts)
-    .where(and(eq(projectContacts.projectId, document.projectId), eq(projectContacts.portalRole, "approver"), eq(projectContacts.isPrimary, true)))
+    .where(and(eq(projectContacts.projectId, document.projectId), eq(projectContacts.portalRole, "approver"), eq(projectContacts.isPrimary, true), isNull(projectContacts.removedAt)))
     .limit(1);
   if (!contact?.email) return false;
   const url = await getActivePortalLink(document.projectId, contact.id);
@@ -60,13 +62,14 @@ export async function emailClientReminder(document: Pending, reason: "nudge" | "
   return true;
 }
 
-/** Daily job: expire overdue documents, warn before expiry, and nudge clients who have not decided. */
-export async function runOfferReminders(now = new Date()) {
+/**
+ * Marks versions whose validity has passed as expired. The daily job runs it for everyone; the portal
+ * and the decision action run it for one project first, so nobody acts on a version that is already out of date.
+ */
+export async function expireOverdue(now = new Date(), scope: { projectId?: string; changeOrderId?: string; notifyClient?: boolean } = {}) {
   const db = getDatabase();
-  const open = inArray(changeOrderRevisions.status, ["sent", "viewed"]);
-  const result = { expired: 0, warned: 0, nudged: 0 };
-
-  const overdue = await pendingDocuments().where(and(open, lt(changeOrderRevisions.responseDueAt, now)));
+  const overdue = await pendingDocuments().where(and(inArray(changeOrderRevisions.status, ["sent", "viewed"]), lt(changeOrderRevisions.responseDueAt, now), scope.projectId ? eq(changeOrders.projectId, scope.projectId) : undefined, scope.changeOrderId ? eq(changeOrders.id, scope.changeOrderId) : undefined));
+  let count = 0;
   for (const document of overdue) {
     const expired = await db.transaction(async (tx) => {
       const [row] = await tx.update(changeOrderRevisions).set({ status: "expired" })
@@ -77,10 +80,30 @@ export async function runOfferReminders(now = new Date()) {
       await notifyProjectStaff(tx, { organizationId: document.organizationId, projectId: document.projectId, eventType: "revision_expired", title: `Изтече: ${document.title}`, body: "Клиентът не реши до крайната дата. Коригирай офертата, за да я изпратиш с нов срок.", href: `/app/offers/${document.changeOrderId}` });
       return true;
     });
-    if (expired) result.expired++;
+    if (!expired) continue;
+    count++;
+    // Not when the client is the one who just opened the portal: they see it there.
+    if (scope.notifyClient !== false) {
+      const kind = document.documentKind === "offer" ? "Офертата" : "Промяната";
+      emailClient(document.projectId, {
+        subject: `${kind} „${document.title}“ изтече`,
+        intro: `${kind} „${document.title}“ (${Number(document.total).toFixed(2)} ${document.currency}) вече не е валидна, защото срокът за решение мина. Ако още я искаш, пиши на ${document.organizationName} и попитай за нова версия.`,
+      });
+    }
   }
+  return count;
+}
 
-  const expiring = await pendingDocuments().where(and(open, isNull(changeOrderRevisions.expiryWarnedAt), gt(changeOrderRevisions.responseDueAt, now), lte(changeOrderRevisions.responseDueAt, new Date(now.getTime() + WARN_BEFORE_DAYS * DAY))));
+/** Daily job: expire overdue documents, warn before expiry, and nudge clients who have not decided. */
+export async function runOfferReminders(now = new Date()) {
+  const db = getDatabase();
+  const open = inArray(changeOrderRevisions.status, ["sent", "viewed"]);
+  const result = { expired: 0, warned: 0, nudged: 0, digests: 0 };
+
+  result.expired = await expireOverdue(now);
+  // Reminders only for active projects: nothing is sent after the work is closed.
+
+  const expiring = await pendingDocuments().where(and(open, eq(projects.status, "active"), isNull(changeOrderRevisions.expiryWarnedAt), gt(changeOrderRevisions.responseDueAt, now), lte(changeOrderRevisions.responseDueAt, new Date(now.getTime() + WARN_BEFORE_DAYS * DAY))));
   for (const document of expiring) {
     const [claimed] = await db.update(changeOrderRevisions).set({ expiryWarnedAt: now })
       .where(and(eq(changeOrderRevisions.id, document.revisionId), isNull(changeOrderRevisions.expiryWarnedAt))).returning({ id: changeOrderRevisions.id });
@@ -88,12 +111,14 @@ export async function runOfferReminders(now = new Date()) {
   }
 
   const quiet = new Date(now.getTime() - NUDGE_AFTER_DAYS * DAY);
-  const stale = await pendingDocuments().where(and(open, lt(changeOrderRevisions.frozenAt, quiet), isNull(changeOrderRevisions.clientRemindedAt)));
+  const stale = await pendingDocuments().where(and(open, eq(projects.status, "active"), lt(changeOrderRevisions.frozenAt, quiet), isNull(changeOrderRevisions.clientRemindedAt)));
   for (const document of stale) {
     const [claimed] = await db.update(changeOrderRevisions).set({ clientRemindedAt: now })
       .where(and(eq(changeOrderRevisions.id, document.revisionId), isNull(changeOrderRevisions.clientRemindedAt))).returning({ id: changeOrderRevisions.id });
     if (claimed && await emailClientReminder(document, "nudge").catch(() => false)) result.nudged++;
   }
+
+  result.digests = await sendClientDigests(now);
   return result;
 }
 

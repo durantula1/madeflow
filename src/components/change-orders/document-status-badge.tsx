@@ -9,6 +9,7 @@ export const documentStatusLabels: Record<string, string> = {
   changes_requested: "Иска промяна",
   expired: "Изтекла",
   superseded: "Заменена",
+  canceled: "Анулирана",
 };
 
 /** Sand: waiting on the client. Coral: needs the team. Mint: done. Same soft tones as the project page. */

@@ -21,17 +21,19 @@ import { ProofStrip } from "./proof-strip";
 import { HeroReveal, Reveal } from "./reveal";
 import { RevisionStack } from "./revision-stack";
 import { SecuritySection } from "./security-section";
+import { UpdatesSection } from "./updates-section";
 import { applyAuthHint } from "@/lib/auth/session-hint";
 import { productDefinition } from "@/lib/seo/site";
 
 // The landing page is static (cached, back/forward-cacheable). Both signed-in and visitor buttons
-// are in the HTML; `authHintScript` (run before paint by the page) sets <html data-auth>, and CSS
+// are in the HTML; `authHintScript` (run before paint by the root layout) sets <html data-auth>, and CSS
 // shows one set, so a reload never flashes the wrong buttons.
 const loadMotionFeatures = () =>
   import("./motion-features").then((module) => module.default);
 
 export function LandingExperience() {
-  // Client-side navigation to "/" does not run the page's inline script, so repeat it here.
+  // The root layout's inline script runs once per page load; after a client navigation to "/"
+  // (say, after signing in) the hint is refreshed here.
   useEffect(applyAuthHint, []);
   const { scrollYProgress } = useScroll();
   const pageProgress = useSpring(scrollYProgress, {
@@ -148,8 +150,8 @@ export function LandingExperience() {
                   <ArrowDown className="size-5" />
                 </a>
               </div>
-              <p className="mt-6 flex items-center gap-2 font-mono text-[0.5625rem] tracking-[0.12em] text-[#52707d]">
-                <Lock className="size-3.5" /> ЗАЩИТЕН ЛИНК · КОД ПО ИМЕЙЛ ·
+              <p className="mt-6 flex items-center gap-2 font-mono text-[0.5625rem] tracking-[0.12em] text-[#52707d] sm:whitespace-nowrap">
+                <Lock className="size-3.5 shrink-0" /> БЕЗ РЕГИСТРАЦИЯ ЗА КЛИЕНТА · КОД ПО ИМЕЙЛ ·
                 ЗАКЛЮЧЕНИ ВЕРСИИ
               </p>
             </HeroReveal>
@@ -173,6 +175,8 @@ export function LandingExperience() {
         <FlowStory />
 
         <PlatformTour />
+
+        <UpdatesSection />
 
         <SecuritySection />
 
@@ -222,10 +226,20 @@ export function LandingExperience() {
             <p className="text-xs leading-5 text-[#9db5b6]">
               {productDefinition}
             </p>
+            {/* Where the name comes from. */}
+            <p className="text-xs leading-5 text-[#9db5b6]">
+              Името идва от латинското{" "}
+              <i className="font-serif text-[#d9e7e4]">pactum</i> — договорка
+              между две страни. Римляните са знаели, че договорката само на
+              думи трудно се доказва. Pakto я записва.
+            </p>
           </div>
           <div className="flex flex-wrap gap-x-8 gap-y-2 font-mono text-[0.5rem] tracking-[0.14em] text-[#9db5b6]">
             <span>© 2026 PAKTO</span>
             <span>СОФИЯ · БЪЛГАРИЯ</span>
+            <Link href="/faq" className="transition-colors hover:text-[#ff765f]">
+              ЧЗВ
+            </Link>
             {Object.values(LEGAL_DOCUMENTS).map((document) => (
               <Link
                 key={document.href}

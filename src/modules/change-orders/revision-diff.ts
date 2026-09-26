@@ -1,5 +1,8 @@
+import { formatDay } from "@/modules/change-orders/labels";
+import { daysLabel, scheduleDays, type ScheduleLine } from "@/modules/change-orders/schedule";
+
 type DiffLine = { description: string; quantity: string | number; unit: string | null; unitPrice: string | number; lineTotal: string | number };
-type DiffRevision = { revisionNumber: number; total: string | number; taxRate: string | number; agreedDeadline: string | null; currency: string; discountAmount?: string | number | null; lineItems: DiffLine[] };
+type DiffRevision = { revisionNumber: number; total: string | number; taxRate: string | number; agreedDeadline: string | null; currency: string; discountAmount?: string | number | null; lineItems: DiffLine[]; schedule?: ScheduleLine[] };
 
 export type RevisionDiff = {
   previousNumber: number;
@@ -27,6 +30,16 @@ export function summarizeRevisionDiff(previous: DiffRevision, next: DiffRevision
   for (const [id, line] of before) if (!after.has(id)) changes.push(`Премахнато: ${line.description}`);
   if (Number(previous.discountAmount ?? 0) !== Number(next.discountAmount ?? 0)) changes.push(Number(next.discountAmount ?? 0) ? `Отстъпка: ${amount(previous.discountAmount ?? 0)} → ${amount(next.discountAmount ?? 0)} ${next.currency}` : "Отстъпката е премахната");
   if (Number(previous.taxRate) !== Number(next.taxRate)) changes.push(`ДДС: ${Number(previous.taxRate)}% → ${Number(next.taxRate)}%`);
-  if (previous.agreedDeadline !== next.agreedDeadline) changes.push(`Срок: ${previous.agreedDeadline ?? "—"} → ${next.agreedDeadline ?? "—"}`);
+  if (previous.agreedDeadline !== next.agreedDeadline) changes.push(`Срок: ${previous.agreedDeadline ? formatDay(previous.agreedDeadline) : "—"} → ${next.agreedDeadline ? formatDay(next.agreedDeadline) : "—"}`);
+  const scheduleBefore = previous.schedule ?? [];
+  const scheduleAfter = next.schedule ?? [];
+  const scheduleKey = (lines: ScheduleLine[]) => JSON.stringify(lines.map((line) => [line.title.trim(), line.durationDays]));
+  if (scheduleKey(scheduleBefore) !== scheduleKey(scheduleAfter)) {
+    changes.push(!scheduleBefore.length
+      ? `Добавен е ориентировъчен график: ${scheduleAfter.length} етапа, ${daysLabel(scheduleDays(scheduleAfter))}`
+      : !scheduleAfter.length
+        ? "Ориентировъчният график е премахнат"
+        : `Ориентировъчният график е променен: ${daysLabel(scheduleDays(scheduleBefore))} → ${daysLabel(scheduleDays(scheduleAfter))}`);
+  }
   return { previousNumber: previous.revisionNumber, totalBefore: Number(previous.total), totalAfter: Number(next.total), currency: next.currency, changes };
 }

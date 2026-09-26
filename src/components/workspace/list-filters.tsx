@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FilterForm } from "@/components/workspace/filter-form";
 import { FilterSelect } from "@/components/workspace/filter-select";
 import { ProjectCombobox, type ProjectOption } from "@/components/workspace/project-combobox";
 import { lastPage, PAGE_SIZE, pageHref } from "@/lib/pagination";
@@ -16,10 +17,10 @@ const projectFieldClassName = "w-full sm:w-56";
 const statusFieldClassName = "min-w-0 flex-1 sm:w-48 sm:flex-none";
 
 export function FilterBar({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <form className={cn(filterBarClassName, className)}>
+  return <FilterForm className={cn(filterBarClassName, className)}>
     {children}
     <Button type="submit" variant="outline">Филтрирай</Button>
-  </form>;
+  </FilterForm>;
 }
 
 export type FilterFieldShape = { label: string; className: string };

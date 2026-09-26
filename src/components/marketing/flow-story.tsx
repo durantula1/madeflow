@@ -127,7 +127,7 @@ function StoryStatus({
       style={{ opacity: active, x }}
       className="flex items-center gap-3 border-b border-[#17364a]/10 py-3 last:border-0"
     >
-      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#d8f2e7] text-[#0b5d4f]">
+      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#bceba8] text-[#102b38]">
         <Icon className="size-4" />
       </span>
       <div className="min-w-0 flex-1">

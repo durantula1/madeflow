@@ -18,13 +18,14 @@ const dateTime = new Intl.DateTimeFormat("bg-BG", { dateStyle: "short", timeStyl
  * Questions and answers about one document, as chat bubbles. `side` is who is reading:
  * their own messages sit on the right. The composer stays at the bottom, above the phone keyboard.
  */
-export function MessageThread({ side, messages, action, hidden, placeholder, emptyText, composerClassName = "sticky bottom-20 lg:static" }: {
+export function MessageThread({ side, messages, action, hidden, placeholder, emptyText, title, composerClassName = "sticky bottom-20 lg:static" }: {
   side: "staff" | "portal_contact";
   messages: Message[];
   action: (state: MessageState, formData: FormData) => Promise<MessageState>;
   hidden: Record<string, string>;
   placeholder: string;
   emptyText: string;
+  title?: string;
   /** The workspace has a bottom tab bar on phones; the portal does not. */
   composerClassName?: string;
 }) {
@@ -40,7 +41,7 @@ export function MessageThread({ side, messages, action, hidden, placeholder, emp
   return (
     <section className="flex flex-col rounded-2xl border bg-card">
       <div className="border-b px-4 py-3">
-        <h2 className="font-semibold">{side === "staff" ? "Разговор с клиента" : "Въпроси към фирмата"}</h2>
+        <h2 className="font-semibold">{title ?? (side === "staff" ? "Разговор с клиента" : "Въпроси към фирмата")}</h2>
         <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground"><Eye className="size-3.5" /> Видимо и за двете страни</p>
       </div>
       <div className="flex max-h-[60dvh] min-h-40 flex-col gap-3 overflow-y-auto px-4 py-4">

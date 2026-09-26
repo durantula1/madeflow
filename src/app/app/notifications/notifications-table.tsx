@@ -14,6 +14,8 @@ import { lastPage, PAGE_SIZE, pageHref, pageOffset } from "@/lib/pagination";
 import { markNotificationReadAction } from "@/modules/team/notification-actions";
 
 const label = "Известия";
+/** Client disputes need an answer from the firm, so they stand out from the other notices. */
+const disputeEvents = new Set(["payment_disputed", "decision_disputed"]);
 
 const columns: DataTableColumn[] = [
   { id: "title", header: "Известие", skeleton: "stack" },
@@ -36,19 +38,22 @@ export async function NotificationsTable({ context, page }: { context: TenantCon
   return <DataTable
     label={label}
     columns={columns}
-    rows={notifications.map((item) => ({
+    rows={notifications.map((item) => {
+      const dispute = disputeEvents.has(item.eventType);
+      return {
       id: item.id,
       cells: [
         <div key="title">
-          <p className="font-medium">{item.title}</p>
-          {item.body ? <p className="text-sm text-muted-foreground">{item.body}</p> : null}
-          {item.href?.startsWith("/app/") ? <Link href={item.href} className="text-sm font-semibold text-primary">Отвори</Link> : null}
+          <p className="flex flex-wrap items-center gap-2 font-medium">{item.title}{dispute ? <Badge variant="danger-soft">Оспорване</Badge> : null}</p>
+          {item.body ? <p className="text-sm text-muted-foreground">{dispute ? <>„{item.body}“</> : item.body}</p> : null}
+          {item.href?.startsWith("/app/") ? <Link href={item.href} className="text-sm font-semibold text-primary">{dispute ? (item.eventType === "payment_disputed" ? "Виж оспореното плащане" : "Виж оспореното решение") : "Отвори"}</Link> : null}
         </div>,
         item.createdAt.toLocaleString("bg-BG"),
         <Badge key="status" variant={item.readAt ? "outline" : "sent"}>{item.readAt ? "Прочетено" : "Ново"}</Badge>,
         item.readAt ? null : <ActionForm key="read" action={markNotificationReadAction} success="Отбелязано като прочетено"><input type="hidden" name="notificationId" value={item.id} /><ActionSubmit variant="outline">Отбележи като прочетено</ActionSubmit></ActionForm>,
       ],
-    }))}
+      };
+    })}
     footer={<ListPagination path="/app/notifications" params={{}} page={page} total={total} />}
   />;
 }

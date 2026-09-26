@@ -2,14 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { and, count, desc, eq, gt, isNotNull } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNotNull, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { getDatabase } from "@/db";
-import { changeOrderRevisions, changeOrders, documentMessages, organizations, projectContacts } from "@/db/schema";
+import { changeOrderRevisions, changeOrders, documentMessages, organizations, projectContacts, projects } from "@/db/schema";
 import { requireProjectCapability } from "@/lib/authz/project-access";
 import { requireTenantContext } from "@/lib/authz/tenant-context";
 import { escapeHtml, sendEmail } from "@/lib/email/send";
+import { markThreadRead } from "@/modules/messages/queries";
 import { getActivePortalLink } from "@/modules/change-portal/links";
 import { getPortalSession, isOrganizationStaff } from "@/modules/change-portal/session";
 import { notifyProjectStaff } from "@/modules/notifications/staff";
@@ -67,19 +68,21 @@ export async function sendStaffMessageAction(_: MessageState, formData: FormData
   if (!document) return { error: "Документът не е намерен." };
   if (await tooManyRecent(document.id, context.userId)) return { error: "Твърде много съобщения за кратко време." };
   await getDatabase().insert(documentMessages).values({ organizationId: context.organizationId, projectId: document.projectId, changeOrderId: document.id, revisionId: document.revisionId, authorType: "staff", authorId: context.userId, body: parsed.data.body, readByStaffAt: new Date() });
+  // Answering is what clears the unread count on the Разговор tab.
+  await markThreadRead(document.id, "staff");
   after(() => emailClientAnswer(document, parsed.data.body).catch((cause) => console.error("[client-answer-email]", cause)));
   revalidatePath(`/app/offers/${document.id}`);
   return { ok: Date.now() };
 }
 
 /** Writes to whoever asked last, falling back to the primary approver. */
-async function emailClientAnswer(document: { id: string; organizationId: string; projectId: string; title: string }, text: string) {
+async function emailClientAnswer(document: { id: string | null; organizationId: string; projectId: string; title: string }, text: string) {
   const db = getDatabase();
   const [lastAsker] = await db.select({ contactId: documentMessages.authorId }).from(documentMessages)
-    .where(and(eq(documentMessages.changeOrderId, document.id), eq(documentMessages.authorType, "portal_contact")))
+    .where(and(document.id ? eq(documentMessages.changeOrderId, document.id) : and(eq(documentMessages.projectId, document.projectId), isNull(documentMessages.changeOrderId)), eq(documentMessages.authorType, "portal_contact")))
     .orderBy(desc(documentMessages.id)).limit(1);
   const [contact] = await db.select({ id: projectContacts.id, name: projectContacts.name, email: projectContacts.email }).from(projectContacts)
-    .where(lastAsker ? eq(projectContacts.id, lastAsker.contactId) : and(eq(projectContacts.projectId, document.projectId), eq(projectContacts.portalRole, "approver"), eq(projectContacts.isPrimary, true)))
+    .where(lastAsker ? and(eq(projectContacts.id, lastAsker.contactId), isNull(projectContacts.removedAt)) : and(eq(projectContacts.projectId, document.projectId), eq(projectContacts.portalRole, "approver"), eq(projectContacts.isPrimary, true), isNull(projectContacts.removedAt)))
     .limit(1);
   if (!contact?.email) return;
   const link = await getActivePortalLink(document.projectId, contact.id);
@@ -92,4 +95,47 @@ async function emailClientAnswer(document: { id: string; organizationId: string;
     text: `Здравей, ${contact.name}!\n\n${from} ти отговори:\n\n${text}\n\nВиж разговора и документа: ${link}`,
     html: `<div style="max-width:600px"><p>Здравей, ${escapeHtml(contact.name)}!</p><p>${escapeHtml(from)} ти отговори за „${escapeHtml(document.title)}“:</p><blockquote style="margin:12px 0;padding:12px 16px;border-left:3px solid #f07c62;background:#f7f5f0;white-space:pre-line">${escapeHtml(text)}</blockquote><p style="margin-top:20px"><a href="${link}" style="display:block;padding:14px 20px;border-radius:10px;background:#18181b;color:#fff;text-decoration:none;font-weight:600;text-align:center">Виж разговора</a></p></div>`,
   });
+}
+
+async function tooManyProjectRecent(projectId: string, authorId: string) {
+  const [row] = await getDatabase().select({ total: count() }).from(documentMessages)
+    .where(and(eq(documentMessages.projectId, projectId), isNull(documentMessages.changeOrderId), eq(documentMessages.authorId, authorId), gt(documentMessages.createdAt, new Date(Date.now() - 3_600_000))));
+  return (row?.total ?? 0) >= HOURLY_LIMIT;
+}
+
+/** A question about the project as a whole ("кога идвате?"), not about one document. */
+export async function sendProjectQuestionAction(_: MessageState, formData: FormData): Promise<MessageState> {
+  const parsed = z.object({ projectPublicId: z.uuid(), body }).safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+  const session = await getPortalSession(parsed.data.projectPublicId);
+  if (!session) return { error: "Сесията е изтекла. Отвори отново линка от имейла." };
+  if (session.projectStatus === "archived") return { error: "Обектът е в архива на фирмата. Свържи се с нея директно." };
+  if (await isOrganizationStaff(session.organizationId)) return { error: "Излез от служебния профил, за да пишеш като клиент." };
+  if (await tooManyProjectRecent(session.projectId, session.contactId)) return { error: "Изпрати твърде много съобщения. Опитай отново след малко." };
+  await getDatabase().transaction(async (tx) => {
+    await tx.insert(documentMessages).values({ organizationId: session.organizationId, projectId: session.projectId, authorType: "portal_contact", authorId: session.contactId, body: parsed.data.body });
+    await notifyProjectStaff(tx, { organizationId: session.organizationId, projectId: session.projectId, eventType: "client_message", title: `${session.contactName} пита за обекта`, body: parsed.data.body, href: `/app/projects/${session.projectId}?tab=questions` });
+  });
+  revalidatePath(`/portal/${parsed.data.projectPublicId}`);
+  revalidatePath(`/app/projects/${session.projectId}`);
+  return { ok: Date.now() };
+}
+
+/** The team's answer to a project question; the client gets it by email. */
+export async function sendProjectAnswerAction(_: MessageState, formData: FormData): Promise<MessageState> {
+  const parsed = z.object({ projectId: z.uuid(), body }).safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+  const context = await requireTenantContext();
+  try { await requireProjectCapability(context, parsed.data.projectId, "view"); }
+  catch (cause) { return { error: cause instanceof Error ? cause.message : "Нямаш достъп." }; }
+  const [project] = await getDatabase().select({ id: projects.id, name: projects.name, publicId: projects.publicId }).from(projects)
+    .where(and(eq(projects.id, parsed.data.projectId), eq(projects.organizationId, context.organizationId))).limit(1);
+  if (!project) return { error: "Обектът не е намерен." };
+  if (await tooManyProjectRecent(project.id, context.userId)) return { error: "Твърде много съобщения за кратко време." };
+  await getDatabase().insert(documentMessages).values({ organizationId: context.organizationId, projectId: project.id, authorType: "staff", authorId: context.userId, body: parsed.data.body, readByStaffAt: new Date() });
+  await markThreadRead({ projectId: project.id }, "staff");
+  after(() => emailClientAnswer({ id: null, organizationId: context.organizationId, projectId: project.id, title: project.name }, parsed.data.body).catch((cause) => console.error("[client-answer-email]", cause)));
+  revalidatePath(`/app/projects/${project.id}`);
+  revalidatePath(`/portal/${project.publicId}`);
+  return { ok: Date.now() };
 }

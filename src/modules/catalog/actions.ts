@@ -49,7 +49,7 @@ export async function saveCatalogItemAction(_: CatalogState, formData: FormData)
     done();
     return { ok: Date.now() };
   } catch (cause) {
-    return { error: cause instanceof Error ? cause.message : "Позицията не беше запазена." };
+    return { error: cause instanceof Error ? cause.message : "Не беше запазено." };
   }
 }
 
@@ -60,7 +60,7 @@ export async function archiveCatalogItemAction(formData: FormData) {
     await getDatabase().update(catalogItems).set({ archivedAt: new Date() }).where(and(eq(catalogItems.id, id), eq(catalogItems.organizationId, context.organizationId)));
     done();
   } catch (cause) {
-    return { error: cause instanceof Error ? cause.message : "Позицията не беше премахната." };
+    return { error: cause instanceof Error ? cause.message : "Не беше премахнато." };
   }
 }
 

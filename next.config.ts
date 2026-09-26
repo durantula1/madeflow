@@ -15,6 +15,10 @@ const nextConfig: NextConfig = {
       "./src/modules/pdf/fonts/NotoSans-Regular.ttf",
       "./src/modules/pdf/fonts/NotoSans-SemiBold.ttf",
     ],
+    "/api/organization/demo-offer": [
+      "./src/modules/pdf/fonts/NotoSans-Regular.ttf",
+      "./src/modules/pdf/fonts/NotoSans-SemiBold.ttf",
+    ],
   },
   async redirects() {
     return [

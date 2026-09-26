@@ -2,28 +2,53 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, Download, EllipsisVertical, LayoutTemplate } from "lucide-react";
+import { Ban, Copy, Download, EllipsisVertical, FilePen, LayoutTemplate } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { startNavigationProgress } from "@/components/workspace/navigation-progress";
 import { saveTemplateFromOfferAction } from "@/modules/catalog/actions";
+import { cancelDocumentAction } from "@/modules/change-orders/actions";
+import { DialogClose } from "@/components/ui/dialog";
+import { ActionForm, ActionSubmit } from "@/components/workspace/action-form";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { startDownload } from "@/components/workspace/download-tray";
 
 /** Secondary document actions, kept out of the header's main row so phones see only what matters. */
-export function DocumentMoreMenu({ changeOrderId, title, pdfHref, canCopy }: { changeOrderId: string; title: string; pdfHref: string | null; canCopy: boolean }) {
+export function DocumentMoreMenu({ changeOrderId, title, pdfHref, canCopy, renegotiateHref = null, cancel }: {
+  changeOrderId: string;
+  title: string;
+  pdfHref: string | null;
+  canCopy: boolean;
+  /** An approved offer: opens a new version after a warning that changes are the usual route. */
+  renegotiateHref?: string | null;
+  /** Cancel the document, or with `partial` only the newer version of an approved offer. */
+  cancel?: { partial: boolean; notifiesClient: boolean } | null;
+}) {
   const router = useRouter();
   const [templateOpen, setTemplateOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [renegotiateOpen, setRenegotiateOpen] = useState(false);
   const items = [
+    ...(renegotiateHref ? [{ id: "renegotiate", label: "Предоговори офертата", icon: FilePen }] : []),
     ...(canCopy ? [{ id: "copy", label: "Дублирай като нова оферта", icon: Copy }, { id: "template", label: "Запази като шаблон", icon: LayoutTemplate }] : []),
     ...(pdfHref ? [{ id: "pdf", label: "Свали PDF", icon: Download }] : []),
+    ...(cancel ? [{ id: "cancel", label: cancel.partial ? "Оттегли новата версия" : "Анулирай", icon: Ban }] : []),
   ];
   if (!items.length) return null;
+  function go(href: string) {
+    startNavigationProgress(href);
+    router.push(href);
+  }
   function onAction(key: React.Key) {
-    if (key === "copy") router.push(`/app/offers/new?from=${changeOrderId}`);
+    if (key === "copy") go(`/app/offers/new?from=${changeOrderId}`);
+    if (key === "renegotiate") setRenegotiateOpen(true);
     if (key === "template") setTemplateOpen(true);
-    if (key === "pdf" && pdfHref) window.location.href = pdfHref;
+    if (key === "pdf" && pdfHref) startDownload({ href: pdfHref, label: `${title} · PDF` });
+    if (key === "cancel") setCancelOpen(true);
   }
   return (
     <>
@@ -37,7 +62,40 @@ export function DocumentMoreMenu({ changeOrderId, title, pdfHref, canCopy }: { c
           ))}
         </DropdownMenu>
       </DropdownMenuTrigger>
+      {renegotiateHref ? (
+        <Dialog isOpen={renegotiateOpen} onOpenChange={setRenegotiateOpen} className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Да предоговоря ли одобрената оферта?</DialogTitle>
+            <DialogDescription>
+              Правиш нова версия на вече договореното. Одобрената версия остава в сила, докато клиентът не одобри новата.
+              За допълнителна работа или корекция на част от обхвата използвай „Нова промяна“.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <DialogClose>Отказ</DialogClose>
+            <Button type="button" onPress={() => { setRenegotiateOpen(false); go(renegotiateHref); }}>Нова версия</Button>
+          </div>
+        </Dialog>
+      ) : null}
       <SaveTemplateDialog open={templateOpen} onOpenChange={setTemplateOpen} changeOrderId={changeOrderId} defaultName={title} />
+      {cancel ? (
+        <Dialog isOpen={cancelOpen} onOpenChange={setCancelOpen} className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{cancel.partial ? "Да оттегля ли новата версия?" : "Да анулирам ли документа?"}</DialogTitle>
+            <DialogDescription>
+              {cancel.partial
+                ? "В сила остава одобрената версия. Новата остава в историята като оттеглена."
+                : "Документът спира да чака решение и остава в историята като анулиран. Това не може да се върне."}
+              {cancel.notifiesClient ? " Клиентът получава имейл." : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <ActionForm action={cancelDocumentAction} success={cancel.partial ? "Новата версия е оттеглена" : "Документът е анулиран"} onSuccess={() => setCancelOpen(false)} className="grid gap-3">
+            <input type="hidden" name="changeOrderId" value={changeOrderId} />
+            <Field><FieldLabel htmlFor="cancel-reason">Причина (по желание)</FieldLabel><Input id="cancel-reason" name="reason" maxLength={500} placeholder="Напр. клиентът се отказа по телефона" /></Field>
+            <div className="flex justify-end gap-2"><DialogClose>Отказ</DialogClose><ActionSubmit variant="destructive">{cancel.partial ? "Оттегли" : "Анулирай"}</ActionSubmit></div>
+          </ActionForm>
+        </Dialog>
+      ) : null}
     </>
   );
 }
@@ -56,7 +114,7 @@ function SaveTemplateDialog({ open, onOpenChange, changeOrderId, defaultName }: 
     <Dialog isOpen={open} onOpenChange={onOpenChange}>
       <DialogHeader>
         <DialogTitle>Запази като шаблон</DialogTitle>
-        <DialogDescription>Обхватът, редовете, ДДС и бележката към клиента стават начало за следващи оферти. Цените могат да се сменят всеки път.</DialogDescription>
+        <DialogDescription>Обхватът, услугите и материалите, ДДС и бележката към клиента стават начало за следващи оферти. Цените могат да се сменят всеки път.</DialogDescription>
       </DialogHeader>
       <form action={submit} className="flex flex-col gap-3">
         <input type="hidden" name="changeOrderId" value={changeOrderId} />

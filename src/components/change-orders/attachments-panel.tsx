@@ -1,11 +1,12 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useRef, useState } from "react";
 import { FileText, ImagePlus, LoaderCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/workspace/confirm-dialog";
 import { cn } from "@/lib/utils";
 import { ATTACHMENT_ACCEPT, formatFileSize, uploadAttachment, type UploadedAttachment } from "@/components/change-orders/attachment-upload";
 import { deleteAttachmentAction } from "@/modules/change-orders/attachment-actions";
@@ -23,7 +24,6 @@ export function AttachmentsPanel({ changeOrderId, initial, editable, description
   const [items, setItems] = useState(initial);
   const [pending, setPending] = useState<Pending[]>([]);
   const [dragging, setDragging] = useState(false);
-  const [deleting, startDelete] = useTransition();
   const input = useRef<HTMLInputElement>(null);
 
   async function upload(file: File) {
@@ -45,12 +45,10 @@ export function AttachmentsPanel({ changeOrderId, initial, editable, description
     void Array.from(files).reduce((chain, file) => chain.then(() => upload(file)), Promise.resolve());
   }
 
-  function remove(attachment: Attachment) {
-    startDelete(async () => {
-      const result = await deleteAttachmentAction({ changeOrderId, attachmentId: attachment.id });
-      if (!result.ok) toast.error(result.error);
-      else setItems((list) => list.filter((item) => item.id !== attachment.id));
-    });
+  async function remove(attachment: Attachment) {
+    const result = await deleteAttachmentAction({ changeOrderId, attachmentId: attachment.id });
+    if (!result.ok) { toast.error(result.error); return false; }
+    setItems((list) => list.filter((item) => item.id !== attachment.id));
   }
 
   if (!editable && !items.length) return null;
@@ -77,17 +75,23 @@ export function AttachmentsPanel({ changeOrderId, initial, editable, description
                   <span className="block px-2.5 pb-2 text-xs text-muted-foreground">{formatFileSize(item.byteSize)}</span>
                 </a>
                 {editable ? (
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="secondary"
-                    aria-label={`Премахни ${item.name}`}
-                    isDisabled={deleting}
-                    onPress={() => remove(item)}
-                    className="absolute top-2 right-2 opacity-100 shadow-sm sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
-                  >
-                    <Trash2 />
-                  </Button>
+                  <ConfirmDialog
+                    trigger={
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="secondary"
+                        aria-label={`Премахни ${item.name}`}
+                        className="absolute top-2 right-2 opacity-100 shadow-sm sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                      >
+                        <Trash2 />
+                      </Button>
+                    }
+                    title="Да премахна ли файла?"
+                    description={`„${item.name}“ се маха от тази чернова. Изпратените версии го запазват.`}
+                    confirmLabel="Премахни"
+                    onConfirm={() => remove(item)}
+                  />
                 ) : null}
               </li>
             ))}

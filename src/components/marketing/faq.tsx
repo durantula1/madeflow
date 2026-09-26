@@ -1,11 +1,13 @@
-import { Plus } from "lucide-react";
+import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
 
+import { FaqItem } from "./faq-item";
 import { Reveal } from "./reveal";
 
 export const faqQuestions = [
   {
     q: "Трябва ли клиентът да си прави профил?",
-    a: "Не. Клиентът получава защитен линк към обекта, вижда документите и решава от телефона си. Решението се потвърждава с еднократен код, изпратен на имейла му.",
+    a: "Не. Клиентът получава защитен линк към обекта, вижда офертите и решава от телефона си. Решението се потвърждава с еднократен код, изпратен на имейла му.",
   },
   {
     q: "Какво става, ако клиентът одобри нещо по грешка?",
@@ -39,18 +41,14 @@ export function Faq() {
         </Reveal>
         <Reveal delay={0.08}>
           <div className="border-t border-[#102b38]/20">
-            {faqQuestions.map(({ q, a }) => (
-              <details key={q} className="mf-faq group border-b border-[#102b38]/20">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-6 py-6 text-lg font-black tracking-[-0.03em] sm:text-xl">
-                  {q}
-                  <span className="grid size-9 shrink-0 place-items-center rounded-full border border-[#102b38]/30 transition-transform duration-300 group-open:rotate-45 group-open:bg-[#ff765f]">
-                    <Plus className="size-4" />
-                  </span>
-                </summary>
-                <p className="max-w-2xl pb-6 text-[0.9375rem] leading-7 text-[#49626b]">{a}</p>
-              </details>
-            ))}
+            {faqQuestions.map(({ q, a }) => <FaqItem key={q} q={q} a={a} />)}
           </div>
+          <Link
+            href="/faq"
+            className="mt-8 inline-flex items-center gap-2 border-b border-[#102b38] pb-1 font-mono text-[0.625rem] font-bold tracking-[0.12em] transition-colors hover:border-[#e85f48] hover:text-[#e85f48]"
+          >
+            ВСИЧКИ ВЪПРОСИ: ЕКИП, ПРАВА, ПЛАЩАНИЯ <ArrowUpRight className="size-3.5" />
+          </Link>
         </Reveal>
       </div>
     </section>

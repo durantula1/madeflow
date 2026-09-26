@@ -3,6 +3,9 @@ import path from "node:path";
 import { Document, Font, Image, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 
 import { discountLabel } from "@/modules/change-orders/pricing";
+import { termAmounts } from "@/modules/change-orders/payment-terms";
+import { cents } from "@/modules/projects/state";
+import { logoBox, type LogoSize } from "@/modules/organizations/logo-box";
 
 // Full Noto Sans (Latin + Cyrillic + €). The @fontsource woff files are unicode-range subsets,
 // and react-pdf cannot merge subsets into one family, so every missing glyph rendered blank.
@@ -22,6 +25,7 @@ const styles = StyleSheet.create({
   page: { fontFamily: "NotoSans", paddingTop: 40, paddingBottom: 56, paddingHorizontal: 44, color: ink, fontSize: 10, lineHeight: 1.4 },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", paddingBottom: 16, borderBottom: `1.5 solid ${ink}` },
   organization: { fontSize: 11, fontWeight: 600 },
+  logo: { objectFit: "contain", marginBottom: 8 },
   kind: { fontSize: 9, color: muted, textTransform: "uppercase", letterSpacing: 0.6 },
   code: { fontSize: 16, fontWeight: 600, textAlign: "right" },
   title: { fontSize: 18, fontWeight: 600, marginTop: 18, lineHeight: 1.25 },
@@ -54,6 +58,7 @@ const styles = StyleSheet.create({
 
 type Line = { description: string; quantity: string; unit: string | null; unitPrice: string; lineTotal: string };
 export type PdfPhoto = { name: string; data: Buffer };
+export type PdfLogo = { data: Buffer; width: number; height: number; size: LogoSize };
 
 const quantityFormat = new Intl.NumberFormat("bg-BG", { maximumFractionDigits: 3 });
 const dateFormat = new Intl.DateTimeFormat("bg-BG", { dateStyle: "long", timeZone: "Europe/Sofia" });
@@ -63,10 +68,17 @@ function formatDeadline(value: string | null) {
   return value ? dateFormat.format(new Date(`${value}T12:00:00Z`)) : null;
 }
 
-export function ChangePdfDocument({ organization, project, siteAddress, contact, kind, code, revision, lines, decision, photos = [] }: {
-  organization: string; project: string; siteAddress: string; contact: string; kind: "offer" | "change"; code: string;
+export function ChangePdfDocument({ organization, logo, project, siteAddress, contact, kind, code, revision, lines, schedule = [], paymentTerms = [], absorbedChanges = [], decision, photos = [] }: {
+  organization: string; logo?: PdfLogo | null; project: string; siteAddress: string; contact: string; kind: "offer" | "change"; code: string;
   revision: { title: string; description: string; reason: string | null; revisionNumber: number; changeKind: string; subtotal: string; taxAmount: string; total: string; currency: string; taxRate: string; agreedDeadline: string | null; contentHash: string | null; frozenAt: Date | null; clientNote: string | null; responseDueAt?: Date | null; discountType?: "percent" | "amount" | null; discountValue?: string | null; discountAmount?: string | null };
-  lines: Line[]; decision: { decision: string; typedName: string; createdAt: Date; verifiedEmail?: string | null; ip?: string | null; signature?: Buffer | null } | null;
+  lines: Line[];
+  /** The indicative schedule of an offer; not a commitment, the agreed deadline is. */
+  schedule?: Array<{ title: string; durationDays: number }>;
+  /** When and how much is due; approved with the offer. */
+  paymentTerms?: Array<{ title: string; percent: number; dueTrigger: string; dueOn: string | null; stageTitle: string | null }>;
+  /** Approved changes this version includes in its price. */
+  absorbedChanges?: Array<{ title: string; total: string }>;
+  decision: { decision: string; typedName: string; createdAt: Date; verifiedEmail?: string | null; ip?: string | null; signature?: Buffer | null } | null;
   photos?: PdfPhoto[];
 }) {
   const money = new Intl.NumberFormat("bg-BG", { style: "currency", currency: revision.currency.trim() || "EUR" });
@@ -81,6 +93,9 @@ export function ChangePdfDocument({ organization, project, siteAddress, contact,
   return <Document title={`${code} · ${revision.title}`} author={organization} creator="Pakto"><Page size="A4" style={styles.page}>
     <View style={styles.header}>
       <View>
+        {/* Explicit width and height: with only one of them react-pdf shrinks the image far below the box. */}
+        {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt attribute */}
+        {logo ? <Image src={logo.data} style={[styles.logo, logoBox(logo, logo.size)]} /> : null}
         <Text style={styles.organization}>{organization}</Text>
         <Text style={{ color: muted, fontSize: 9 }}>Документ, създаден с Pakto</Text>
       </View>
@@ -124,7 +139,7 @@ export function ChangePdfDocument({ organization, project, siteAddress, contact,
       ))}
       <View style={styles.summary} wrap={false}>
         {Number(revision.discountAmount ?? 0) ? <>
-          <View style={styles.summaryRow}><Text style={{ color: muted }}>Сума по редове</Text><Text>{amount(String(Number(revision.subtotal) + Number(revision.discountAmount)))}</Text></View>
+          <View style={styles.summaryRow}><Text style={{ color: muted }}>Сума без отстъпка</Text><Text>{amount(String(Number(revision.subtotal) + Number(revision.discountAmount)))}</Text></View>
           <View style={styles.summaryRow}><Text style={{ color: muted }}>{discountLabel(revision.discountType ?? null, revision.discountValue ?? null)}</Text><Text>−{money.format(Number(revision.discountAmount))}</Text></View>
         </> : null}
         {Number(revision.taxRate) ? <>
@@ -134,6 +149,47 @@ export function ChangePdfDocument({ organization, project, siteAddress, contact,
         <View style={styles.summaryTotal}><Text>Общо</Text><Text>{amount(revision.total)}</Text></View>
       </View>
     </View>
+
+    {schedule.length ? (
+      <View style={styles.section} wrap={false}>
+        <Text style={styles.heading}>Ориентировъчен график</Text>
+        {schedule.map((item, index) => (
+          <View key={index} style={styles.summaryRow}>
+            <Text>{index + 1}. {item.title}</Text>
+            <Text>{item.durationDays === 1 ? "1 ден" : `${item.durationDays} дни`}</Text>
+          </View>
+        ))}
+        <Text style={styles.note}>
+          Общо около {schedule.reduce((sum, item) => sum + item.durationDays, 0)} дни. Графикът е ориентировъчен: точните дати се уточняват след одобрение{deadline ? `, а договореният срок за изпълнение е ${deadline}` : ""}.
+        </Text>
+      </View>
+    ) : null}
+
+    {paymentTerms.length ? (
+      <View style={styles.section} wrap={false}>
+        <Text style={styles.heading}>Плащане</Text>
+        {termAmounts(cents(revision.total), paymentTerms).map((minor, index) => {
+          const term = paymentTerms[index]!;
+          const when = term.dueTrigger === "on_date" && term.dueOn ? `до ${formatDeadline(term.dueOn)}` : term.dueTrigger === "on_stage" ? `след „${term.stageTitle ?? "етап"}“` : term.dueTrigger === "on_completion" ? "при завършване" : "при одобрение";
+          return (
+            <View key={index} style={styles.summaryRow}>
+              <Text>{term.title} · {Number(term.percent)}% · {when}</Text>
+              <Text>{money.format(Number(minor) / 100)}</Text>
+            </View>
+          );
+        })}
+      </View>
+    ) : null}
+
+    {absorbedChanges.length ? (
+      <View style={styles.section} wrap={false}>
+        <Text style={styles.heading}>Включени одобрени промени</Text>
+        {absorbedChanges.map((change, index) => (
+          <View key={index} style={styles.summaryRow}><Text>{change.title}</Text><Text>{money.format(Number(change.total))}</Text></View>
+        ))}
+        <Text style={styles.note}>Тези промени са част от цената на тази версия и не се добавят отделно.</Text>
+      </View>
+    ) : null}
 
     {decision ? (
       <View style={styles.decision} wrap={false}>

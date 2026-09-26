@@ -4,7 +4,8 @@ import { FilePlus2 } from "lucide-react";
 
 import { CatalogManager } from "@/components/catalog/catalog-manager";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ConfirmAction } from "@/components/workspace/confirm-action";
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/workspace/confirm-dialog";
 import { PageHeader } from "@/components/workspace/page/page-header";
 import { EmptyResult } from "@/components/workspace/page/empty-result";
 import { PageShell } from "@/components/workspace/page/page-shell";
@@ -29,8 +30,8 @@ export default async function CatalogPage({ searchParams }: PageProps<"/app/cata
       <PageHeader page="catalog" />
       <Tabs defaultSelectedKey={query.tab === "templates" ? "templates" : "items"}>
         <TabsList>
-          <TabsTrigger id="items">Позиции{items.length ? <span className="ml-1 rounded-full bg-sidebar-accent px-1.5 text-2xs">{items.length}</span> : null}</TabsTrigger>
-          <TabsTrigger id="templates">Шаблони{templates.length ? <span className="ml-1 rounded-full bg-sidebar-accent px-1.5 text-2xs">{templates.length}</span> : null}</TabsTrigger>
+          <TabsTrigger id="items">Услуги и материали</TabsTrigger>
+          <TabsTrigger id="templates">Шаблони</TabsTrigger>
         </TabsList>
         <TabsContent id="items" className="pt-5">
           <CatalogManager items={items} canEdit={canEdit} />
@@ -45,11 +46,11 @@ export default async function CatalogPage({ searchParams }: PageProps<"/app/cata
                     <div>
                       <p className="font-semibold">{template.name}</p>
                       <p className="mt-0.5 text-sm text-muted-foreground">{template.title}</p>
-                      <p className="mt-2 text-xs text-muted-foreground">{template.lines.length} {template.lines.length === 1 ? "ред" : "реда"} · {total.toFixed(2)} EUR без ДДС · {vatLabel(template.taxRate)} · {dateFormat.format(template.createdAt)}</p>
+                      <p className="mt-2 text-xs text-muted-foreground">{template.lines.length === 1 ? "1 услуга или материал" : `${template.lines.length} услуги и материали`} · {total.toFixed(2)} EUR без ДДС · {vatLabel(template.taxRate)} · {dateFormat.format(template.createdAt)}</p>
                     </div>
                     <div className="mt-auto flex flex-wrap items-center gap-2">
                       {canEdit ? <Link href={`/app/offers/new?template=${template.id}`} className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground sm:flex-none"><FilePlus2 className="size-4" /> Нова оферта от шаблона</Link> : null}
-                      {canEdit ? <ConfirmAction label="Изтрий" description={`Шаблонът „${template.name}“ ще изчезне от списъка. Офертите, направени от него, остават.`} action={archiveTemplateAction} field="id" value={template.id} success="Шаблонът е изтрит" /> : null}
+                      {canEdit ? <ConfirmDialog trigger={<Button type="button" variant="destructive" className="h-10">Изтрий</Button>} title="Да изтрия ли шаблона?" description={`Шаблонът „${template.name}“ ще изчезне от списъка. Офертите, направени от него, остават.`} confirmLabel="Изтрий" action={archiveTemplateAction} fields={{ id: template.id }} success="Шаблонът е изтрит" /> : null}
                     </div>
                   </li>
                 );

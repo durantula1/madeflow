@@ -1,17 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { CircleCheck, CircleAlert, ExternalLink } from "lucide-react";
 
 import { DeleteAccountDialog, ExportDataLink, LeaveOrganizationDialog } from "@/components/settings/account-dialogs";
-import { SettingsSection } from "@/components/settings/settings-section";
+import { SettingsGroup, SettingsRow } from "@/components/settings/settings-group";
 import { ActionForm, ActionSubmit } from "@/components/workspace/action-form";
 import { requireTenantContext } from "@/lib/authz/tenant-context";
 import { ACCOUNT_DELETION_GRACE_DAYS, LEGAL_DOCUMENTS, type LegalDocument } from "@/lib/legal";
 import { acceptLegalDocumentsAction } from "@/modules/account/actions";
 import { getAccountDeletionPlan, getLeaveBlocker, listUserConsents } from "@/modules/account/queries";
 
-const dateFormat = new Intl.DateTimeFormat("bg-BG", { dateStyle: "long", timeZone: "Europe/Sofia" });
+const dateFormat = new Intl.DateTimeFormat("bg-BG", { dateStyle: "medium", timeZone: "Europe/Sofia" });
 
-export const metadata: Metadata = { title: "Данни и поверителност · Настройки" };
+export const metadata: Metadata = { title: "Данни и акаунт · Настройки" };
 
 export default async function PrivacySettingsPage() {
   const context = await requireTenantContext();
@@ -24,56 +25,55 @@ export default async function PrivacySettingsPage() {
     ...LEGAL_DOCUMENTS[key],
     accepted: consents.find((consent) => consent.document === key && consent.version === LEGAL_DOCUMENTS[key].version),
   }));
+  const missingConsent = documents.some((document) => !document.accepted);
 
   return <>
-    <SettingsSection title="Моите данни" description="Изтегли всичко, което Pakto пази за теб като потребител: профил, членства, достъп до обекти, известия и действия.">
-      <ExportDataLink />
-      <p className="mt-3 text-xs text-muted-foreground">
-        Обектите, клиентите и документите принадлежат на фирмата. Цялостен експорт прави собственикът.
-      </p>
-    </SettingsSection>
+    <SettingsGroup title="Твоите данни">
+      <SettingsRow
+        label="Изтегли данните си"
+        description="Профил, членства, достъп до обекти, известия и действия в един JSON файл. Обектите и офертите са на фирмата и ги изтегля собственикът."
+        align="end"
+      >
+        <ExportDataLink label="Изтегли JSON" />
+      </SettingsRow>
+    </SettingsGroup>
 
-    <SettingsSection title="Документи, които си приел">
-      <ul className="divide-y rounded-xl border">
-        {documents.map((document) => (
-          <li key={document.key} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-            <Link href={document.href} target="_blank" className="font-medium underline-offset-4 hover:underline">{document.label}</Link>
-            <span className="text-xs text-muted-foreground">
-              {document.accepted ? `Версия ${document.version} · приета на ${dateFormat.format(document.accepted.acceptedAt)}` : "Текущата версия не е приета"}
-            </span>
-          </li>
-        ))}
-      </ul>
-      {documents.some((document) => !document.accepted) ? (
-        <ActionForm action={acceptLegalDocumentsAction} success="Записахме съгласието ти" className="mt-4">
-          <ActionSubmit variant="outline" className="h-10">Прочетох и приемам текущите версии</ActionSubmit>
+    <SettingsGroup
+      title="Условия и поверителност"
+      action={missingConsent ? (
+        <ActionForm action={acceptLegalDocumentsAction} success="Записахме съгласието ти">
+          <ActionSubmit variant="outline" className="h-8">Приемам текущите версии</ActionSubmit>
         </ActionForm>
       ) : null}
-    </SettingsSection>
-
-    <SettingsSection title={`Напусни „${context.organizationName}“`} description="Спираш да работиш с фирмата, но искаш да запазиш профила си.">
-      <LeaveOrganizationDialog organizationName={context.organizationName} blocker={leaveBlocker} />
-    </SettingsSection>
-
-    <SettingsSection
-      danger
-      title={closesCompany ? "Изтрий профила и фирмата" : "Изтрий профила"}
-      description={closesCompany
-        ? `Ти си единственият член на „${context.organizationName}“, затова фирмата се закрива заедно с профила.`
-        : "Изтрива профила ти, но документите, които си създал, остават във фирмата."}
     >
-      <ul className="mb-4 list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
-        <li>Излизаш от всички устройства веднага.</li>
-        <li>Имаш {ACCOUNT_DELETION_GRACE_DAYS} дни да се откажеш, като влезеш отново.</li>
-        {closesCompany ? <>
-          <li>После изтриваме фирмата, обектите, документите, плащанията и файловете. Клиентските линкове спират да работят.</li>
-          <li>Изтегли данните на фирмата преди това, ако ти трябват за счетоводството.</li>
-        </> : <>
-          <li>След това изтриваме имейла, телефона и паролата ти.</li>
-          <li>Във фирмата ще се показваш като „Изтрит потребител“.</li>
-        </>}
-      </ul>
-      <DeleteAccountDialog plan={deletionPlan} graceDays={ACCOUNT_DELETION_GRACE_DAYS} />
-    </SettingsSection>
+      {documents.map((document) => (
+        <SettingsRow
+          key={document.key}
+          label={<Link href={document.href} target="_blank" className="inline-flex items-center gap-1.5 underline-offset-4 hover:underline">{document.label}<ExternalLink className="size-3.5 text-muted-foreground" /></Link>}
+          align="end"
+        >
+          {document.accepted ? (
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><CircleCheck className="size-4 rounded-full bg-brand-green text-[#102b38]" />Версия {document.version} · приета {dateFormat.format(document.accepted.acceptedAt)}</span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400"><CircleAlert className="size-4" />Новата версия {document.version} не е приета</span>
+          )}
+        </SettingsRow>
+      ))}
+    </SettingsGroup>
+
+    <SettingsGroup title="Опасна зона" danger>
+      <SettingsRow label={`Напусни „${context.organizationName}“`} description="Губиш достъп до фирмата, но профилът ти остава." align="end">
+        <LeaveOrganizationDialog organizationName={context.organizationName} blocker={leaveBlocker} />
+      </SettingsRow>
+      <SettingsRow
+        label={closesCompany ? "Изтрий профила и фирмата" : "Изтрий профила"}
+        description={closesCompany
+          ? `Ти си единственият член, затова фирмата се закрива с профила. Имаш ${ACCOUNT_DELETION_GRACE_DAYS} дни да се откажеш.`
+          : `Офертите ти остават във фирмата. Имаш ${ACCOUNT_DELETION_GRACE_DAYS} дни да се откажеш.`}
+        align="end"
+      >
+        <DeleteAccountDialog plan={deletionPlan} graceDays={ACCOUNT_DELETION_GRACE_DAYS} />
+      </SettingsRow>
+    </SettingsGroup>
   </>;
 }

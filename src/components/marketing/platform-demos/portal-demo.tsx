@@ -67,7 +67,7 @@ export function PortalDemo() {
               </m.div>
             )}
             {step >= 4 && (
-              <m.div key="done" initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="mt-5 rounded-2xl bg-[#d8f2e7] p-4 text-center">
+              <m.div key="done" initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="mt-5 rounded-2xl bg-[#dcf3d1] p-4 text-center">
                 <CircleCheck className="mx-auto size-8 text-[#16916d]" />
                 <p className="mt-2 text-sm font-black">Решението е записано</p>
                 <p className="mt-1 demo-text-10 text-[#35535e]">{name} · 14:32 · потвърдено с код</p>

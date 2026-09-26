@@ -1,61 +1,287 @@
 import Link from "next/link";
+import { ArrowRight, CalendarClock } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { OfferCard, PaidBar } from "@/components/projects/offer-cards";
+import { ClaimPaymentRow, DisputeReceiptRow } from "@/components/portal/inline-forms";
+import { BillLine, Leader, PaperLabel, Quote, Slip } from "@/components/portal/paper";
+import { cn } from "@/lib/utils";
+import { documentCode, formatDay } from "@/modules/change-orders/labels";
+import type { ScopeView } from "@/modules/projects/scope";
+import { cents, formatCents, type ProjectState } from "@/modules/projects/state";
 
-import { disputePaymentAction } from "@/modules/change-portal/actions";
-import { cents, formatCents, getProjectState } from "@/modules/projects/state";
-import { EmptyResult } from "@/components/workspace/page/empty-result";
-
-type State = NonNullable<Awaited<ReturnType<typeof getProjectState>>>;
-
-const workLabels: Record<string, string> = {
-  not_started: "Одобрена, предстои", scheduled: "Планирана", in_progress: "В работа", completed: "Завършена",
+type Tone = "secondary" | "success-soft" | "warning-soft" | "danger-soft" | "info-soft";
+const stageStates: Record<string, { label: string; tone: Tone }> = {
+  planned: { label: "Предстои", tone: "secondary" },
+  in_progress: { label: "В работа", tone: "info-soft" },
+  completed: { label: "Завършен", tone: "success-soft" },
 };
-const stageLabels: Record<string, string> = { planned: "Предстои", in_progress: "В работа", completed: "Завършен" };
 const paymentLabels: Record<string, string> = { deposit: "Капаро", progress: "Междинно", final: "Окончателно", other: "Друго" };
-const methodLabels: Record<string, string> = { cash: "В брой", bank: "Банков превод", card: "Карта", other: "Друго" };
+const methodLabels: Record<string, string> = { cash: "в брой", bank: "банков превод", card: "карта", other: "друго" };
 
-export function ProjectOverview({ state, portalPublicId, receiptsHref, showPayments = true, showPending = true, section = "all" }: { state: State; portalPublicId?: string; /** Staff-side link to the full receipts list, shown when only the latest ones are loaded. */ receiptsHref?: string; showPayments?: boolean; showPending?: boolean; section?: "all" | "summary" | "work" | "payments" }) {
-  const today = new Date().toISOString().slice(0, 10);
-  const nextWeek = new Date(Date.parse(`${today}T00:00:00Z`) + 7 * 86400000).toISOString().slice(0, 10);
-  const priceChanges = state.changes.map((change, index) => ({
-    ...change,
-    runningMinor: cents(state.offer?.total) + state.changes.slice(0, index + 1).reduce((sum, item) => sum + cents(item.total), 0n),
-    previousDeadline: state.changes.slice(0, index).reduce<string | null>((current, item) => item.deadline ?? current, state.offer?.deadline ?? null),
-  }));
+/** A client's "I paid" that the company has not confirmed yet, or rejected with a reason. */
+export type PortalClaim = { id: string; amount: string; currency: string; paidOn: string; status: "pending" | "confirmed" | "rejected"; response: string | null; installmentId: string | null; offerId: string | null };
+
+const today = () => new Date().toISOString().slice(0, 10);
+const sofiaDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Sofia" });
+/** An amount without the currency, for bill lines whose currency the result line already names. */
+const plain = (minor: bigint) => formatCents(minor, "").trim();
+const signed = (minor: bigint) => `${minor < 0n ? "−" : "+"} ${plain(minor < 0n ? -minor : minor)}`;
+
+/**
+ * Everything waiting for the client, on top of the portal home: documents to decide and finished
+ * work to accept, as one slip of rows.
+ */
+export function WaitingForYou({ documents, handovers, portalPublicId }: {
+  documents: { id: string; kind: "offer" | "change"; sequenceNumber: number; title: string; total: string; currency: string }[];
+  handovers: { id: string; sequenceNumber: number; title: string }[];
+  portalPublicId: string;
+}) {
+  if (!documents.length && !handovers.length) return null;
+  const path = `/portal/${portalPublicId}/changes`;
+  const offers = documents.filter((item) => item.kind === "offer").length;
+  const changes = documents.length - offers;
+  const summary = [
+    offers ? (offers === 1 ? "1 оферта" : `${offers} оферти`) : null,
+    changes ? (changes === 1 ? "1 промяна" : `${changes} промени`) : null,
+    handovers.length ? (handovers.length === 1 ? "приемане на работа" : `${handovers.length} приемания на работа`) : null,
+  ].filter(Boolean).join(" · ");
+  return (
+    <Slip label={documents.length ? `Очаква решение · ${summary}` : `Очаква приемане · ${summary}`}>
+      <ul className="divide-y divide-dashed">
+        {handovers.map((item) => (
+          <WaitingRow key={`handover-${item.id}`} href={`${path}/${item.id}#acceptance`} kind={`Приемане на работа · ${documentCode("offer", item.sequenceNumber)}`} action="Приеми">
+            <span className="min-w-0 truncate font-medium">{item.title}</span>
+            <Leader />
+            <span className="shrink-0 text-muted-foreground">за преглед</span>
+          </WaitingRow>
+        ))}
+        {documents.map((item) => (
+          <WaitingRow key={item.id} href={`${path}/${item.id}`} kind={`${item.kind === "offer" ? "Оферта" : "Промяна"} · ${documentCode(item.kind, item.sequenceNumber)}`} action="Реши">
+            <span className="min-w-0 truncate font-medium">{item.title}</span>
+            <Leader />
+            <span className="shrink-0 tabular-nums">{formatCents(cents(item.total), item.currency)}</span>
+          </WaitingRow>
+        ))}
+      </ul>
+    </Slip>
+  );
+}
+
+function WaitingRow({ href, kind, action, children }: { href: string; kind: string; action: string; children: React.ReactNode }) {
+  return (
+    <li>
+      <Link href={href} className="group flex items-center gap-3 px-4 py-3 text-sm transition hover:bg-primary/5">
+        <span className="min-w-0 flex-1">
+          <span className="block font-mono text-xs text-muted-foreground">{kind}</span>
+          <span className="mt-0.5 flex items-baseline">{children}</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-1 font-semibold text-primary">{action}<ArrowRight className="size-3.5 transition group-hover:translate-x-0.5" /></span>
+      </Link>
+    </li>
+  );
+}
+
+/**
+ * The portal's "Обобщение", written as the calculation the client would do on paper: what was agreed
+ * (offer, then each change), minus what was paid, equals what is left.
+ */
+export function PortalSummary({ state, view, portalPublicId, offers }: { state: ProjectState; view: ScopeView; portalPublicId: string; offers: ProjectState["offers"] }) {
+  const inForce = offers.filter((offer) => offer.inForce);
+  const single = offers.length === 1 && offers[0]!.inForce ? offers[0]! : null;
+  if (!view.hasAgreement) return (
+    <section className="rounded-2xl border bg-card p-5">
+      <p className="text-sm leading-6 text-muted-foreground">Цената, плащанията и сроковете ще се появят тук, след като одобриш оферта.</p>
+    </section>
+  );
+  const lines = single
+    ? [
+      { key: single.id, code: documentCode("offer", single.sequenceNumber), label: single.title, amount: plain(cents(single.total)) },
+      ...single.changes.map((change) => ({ key: change.id, code: documentCode("change", change.sequenceNumber), label: change.title, amount: signed(cents(change.total)) })),
+    ]
+    : inForce.map((offer) => ({ key: offer.id, code: documentCode("offer", offer.sequenceNumber), label: offer.title, amount: plain(offer.contractMinor) }));
+  const left = view.remainingMinor;
+  return (
+    <div className="flex flex-col gap-4">
+      <section className="rounded-2xl border bg-card p-5">
+        <div className="space-y-2">
+          {lines.map((line) => <BillLine key={line.key} code={line.code} label={line.label} amount={line.amount} />)}
+        </div>
+        {single?.absorbedChanges.length ? <p className="mt-1.5 text-xs text-muted-foreground">В цената на офертата вече са включени: {single.absorbedChanges.map((change) => change.title).join(", ")}</p> : null}
+        <div className="mt-3 space-y-2 border-t pt-3">
+          {lines.length > 1 ? <BillLine label="Договорено" amount={plain(view.contractMinor)} /> : null}
+          <BillLine label="Платено" amount={`− ${plain(view.paidMinor)}`} muted />
+        </div>
+        <BillLine
+          className={cn("mt-3 border-t-[3px] border-double border-foreground/25 pt-3", left > 0n && "text-primary")}
+          strong
+          label={left > 0n ? "Остава да платиш" : left < 0n ? "Надплатено" : "Изплатено изцяло"}
+          amount={formatCents(left < 0n ? -left : left, view.currency)}
+        />
+        <PaidBar className="mt-4" paidMinor={view.paidMinor} contractMinor={view.contractMinor} />
+        <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          <CalendarClock className="size-3.5 shrink-0 text-primary" />
+          {view.deadline ? <span>Срок <strong className="font-semibold text-foreground">{formatDay(view.deadline)}</strong></span> : <span>Без краен срок</span>}
+          {state.nextMilestone ? <span>· следва „{state.nextMilestone.title}“ до {formatDay(state.nextMilestone.dueOn)}</span> : null}
+        </p>
+        {state.unassigned.receiptsCount ? (
+          <Quote className="mt-3 text-muted-foreground">{formatCents(state.unassigned.paidMinor, state.currency)} от плащанията ти още не са отнесени към конкретна оферта. Влизат в платеното.</Quote>
+        ) : null}
+      </section>
+      {offers.length > 1 ? (
+        <section className="flex flex-col gap-2">
+          <PaperLabel>Договорености</PaperLabel>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {offers.map((offer) => <OfferCard key={offer.id} offer={offer} href={`/portal/${portalPublicId}/changes/${offer.id}`} />)}
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The work schedule the client sees, one line per stage with its date first. A stage that moved
+ * says where it was and why.
+ */
+export function PortalSchedule({ view }: { view: ScopeView }) {
+  const now = today();
+  const nextWeek = new Date(Date.parse(`${now}T00:00:00Z`) + 7 * 86400000).toISOString().slice(0, 10);
+  if (!view.hasAgreement) return <section className="rounded-2xl border bg-card p-5">
+    <p className="text-sm leading-6 text-muted-foreground">Графикът ще се появи тук, след като одобриш офертата.</p>
+  </section>;
+  const next = view.milestones.find((item) => item.status !== "completed");
+  const done = view.milestones.filter((item) => item.status === "completed").length;
+  const code = (offerId: string | null) => {
+    const offer = view.offers.find((item) => item.id === offerId);
+    return view.offers.length > 1 && offer ? documentCode("offer", offer.sequenceNumber) : null;
+  };
+  return <section className="rounded-2xl border bg-card px-5 py-4">
+    <p className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm">
+      <span className="font-semibold">График на работата</span>
+      <span className="text-muted-foreground">
+        {view.milestones.length ? `${done} от ${view.milestones.length} завършени` : ""}
+        {view.milestones.length && view.deadline ? " · " : ""}
+        {view.deadline ? <>срок <strong className="font-semibold text-foreground">{formatDay(view.deadline)}</strong></> : null}
+      </span>
+    </p>
+    {view.milestones.length ? <ol className="mt-2 divide-y divide-dashed">{view.milestones.map((item) => {
+      const overdue = item.status !== "completed" && item.dueOn < now;
+      const soon = item.status !== "completed" && !overdue && item.dueOn <= nextWeek;
+      const offerCode = code(item.offerId);
+      const state: { label: string; tone: Tone } = overdue ? { label: "Просрочен", tone: "danger-soft" } : item.id === next?.id ? { label: soon ? "Следващ · скоро" : "Следващ", tone: soon ? "warning-soft" : "info-soft" } : stageStates[item.status] ?? { label: item.status, tone: "secondary" };
+      const date = item.completedAt ? formatDay(sofiaDay.format(item.completedAt)) : formatDay(item.dueOn);
+      return <li key={item.id} className="grid grid-cols-[5.5rem_minmax(0,1fr)_auto] items-center gap-x-3 py-2.5 text-sm">
+        <span className={cn("font-mono text-xs text-muted-foreground", overdue && "text-destructive")}>{date}</span>
+        <div className="min-w-0">
+          <p className={cn("font-medium", item.id === next?.id && "text-primary", item.status === "completed" && "text-muted-foreground")}>
+            {offerCode ? <span className="mr-1.5 font-mono text-xs font-normal text-muted-foreground">{offerCode}</span> : null}
+            {item.title}
+          </p>
+          {item.previousDueOn && item.status !== "completed" ? <Quote tone="warning" className="mt-1 text-xs text-muted-foreground">Преместен от {formatDay(item.previousDueOn)}{item.dueChangeReason ? ` · ${item.dueChangeReason}` : ""}</Quote> : null}
+        </div>
+        <Badge variant={state.tone}>{state.label}</Badge>
+      </li>;
+    })}</ol> : <p className="mt-2 text-sm text-muted-foreground">Фирмата още не е добавила етапи.</p>}
+  </section>;
+}
+
+type Receipt = ProjectState["receipts"][number];
+
+function receiptLabel(receipt: Receipt) {
+  if (receipt.correctionOfId) return Number(receipt.amount) < 0 ? "Сторно" : "Корекция";
+  return paymentLabels[receipt.kind] ?? "Плащане";
+}
+
+/** One statement line: date, what, amount. */
+function Entry({ date, title, sub, amount, badge, className }: { date: string; title: React.ReactNode; sub?: React.ReactNode; amount: React.ReactNode; badge?: React.ReactNode; className?: string }) {
+  return <div className={cn("grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 text-sm sm:grid-cols-[5.5rem_minmax(0,1fr)_auto]", className)}>
+    <span className="hidden font-mono text-xs text-muted-foreground sm:block">{date}</span>
+    <span className="min-w-0">
+      <span className="block truncate font-medium">{title}</span>
+      <span className="block text-xs text-muted-foreground"><span className="font-mono sm:hidden">{date}{sub ? " · " : ""}</span>{sub}</span>
+    </span>
+    <span className="flex flex-col items-end gap-1"><span className="font-semibold tabular-nums">{amount}</span>{badge}</span>
+  </div>;
+}
+
+/**
+ * Payments as a bank statement: one balance line, the plan with "Платих" on each open installment,
+ * then every payment (the client's own unconfirmed ones first). Answers and disputes are quotes
+ * under their line; every form opens in place.
+ */
+export function PortalPayments({ view, portalPublicId, claims, canAct }: { view: ScopeView; portalPublicId: string; claims: PortalClaim[]; canAct: boolean }) {
+  const overpaid = view.remainingMinor < 0n;
+  const pendingClaims = claims.filter((claim) => claim.status === "pending");
+  const rejected = claims.filter((claim) => claim.status === "rejected");
+  const now = today();
+  const balance = <p className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm">
+    {view.hasAgreement ? <>
+      <span>Платено <strong className="whitespace-nowrap tabular-nums">{formatCents(view.paidMinor, view.currency)}</strong> <span className="whitespace-nowrap text-muted-foreground">от {formatCents(view.contractMinor, view.currency)}</span></span>
+      <span className={cn("font-semibold whitespace-nowrap tabular-nums", view.remainingMinor > 0n ? "text-primary" : "text-muted-foreground")}>
+        {view.remainingMinor === 0n ? "изплатено" : `${overpaid ? "надплатено" : "остава"} ${formatCents(overpaid ? -view.remainingMinor : view.remainingMinor, view.currency)}`}
+      </span>
+    </> : <span>Платено до момента <strong className="tabular-nums">{formatCents(view.paidMinor, view.currency)}</strong></span>}
+  </p>;
+
   return <div className="space-y-5">
-    {(section === "all" || section === "summary") ? <section className="rounded-2xl border bg-card p-5">
-      <h2 className="text-lg font-semibold">Договорено към момента</h2>
-      {state.offer ? <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl bg-secondary p-4"><p className="text-xs text-muted-foreground">Крайна цена на обекта</p><p className="mt-1 text-xl font-semibold">{formatCents(state.contractMinor, state.currency)}</p></div>
-        <div className="rounded-xl bg-secondary p-4"><p className="text-xs text-muted-foreground">Получено</p><p className="mt-1 text-xl font-semibold">{formatCents(state.paidMinor, state.currency)}</p></div>
-        <div className="rounded-xl bg-secondary p-4"><p className="text-xs text-muted-foreground">Оставащо</p><p className="mt-1 text-xl font-semibold">{formatCents(state.remainingMinor, state.currency)}</p></div>
-        <div className="rounded-xl bg-secondary p-4"><p className="text-xs text-muted-foreground">Договорен краен срок</p><p className="mt-1 text-xl font-semibold">{state.deadline ?? "—"}</p></div>
-      </div> : <p className="mt-3 rounded-xl bg-secondary p-4 text-sm leading-6 text-muted-foreground">{portalPublicId ? "Цената и срокът ще се появят тук, след като одобриш офертата." : "Цената и срокът ще се появят тук, след като клиентът одобри офертата."}</p>}
-      {state.offer ? <div className="mt-4 space-y-2 text-sm">
-        <div className="flex justify-between gap-3"><span>Основна оферта · {state.offer.title}</span><strong>{Number(state.offer.total).toFixed(2)} {state.currency}</strong></div>
-        {priceChanges.map((change) => <div key={change.id} className="flex justify-between gap-3 border-t pt-2"><span>{change.title} · {workLabels[change.workStatus] ?? change.workStatus}{change.deadline ? ` · срок ${change.previousDeadline ?? "—"} → ${change.deadline}` : " · без промяна в срока"}</span><strong><span className="font-normal text-muted-foreground">Стойност на промяната: </span>{Number(change.total) >= 0 ? "+" : ""}{Number(change.total).toFixed(2)} {state.currency} → {formatCents(change.runningMinor, state.currency)}</strong></div>)}
-      </div> : null}
+    <section className="rounded-2xl border bg-card px-5 py-4">
+      {canAct ? <ClaimPaymentRow row={balance} stack trigger="Отбележи плащане" portalPublicId={portalPublicId} offerId={view.offer?.id ?? null} /> : balance}
+      {view.hasAgreement ? <PaidBar className="mt-3" paidMinor={view.paidMinor} contractMinor={view.contractMinor} /> : (
+        <p className="mt-2 text-xs text-muted-foreground">{view.scope === "none" ? "Плащания, които още не са отнесени към конкретна оферта." : "Колко остава ще се вижда тук, след като одобриш офертата."}</p>
+      )}
+    </section>
+
+    {view.installments.length ? <section className="space-y-2">
+      <PaperLabel>Платежен план</PaperLabel>
+      <ol className="divide-y divide-dashed rounded-2xl border bg-card px-5">{view.installments.map((item) => {
+        const claimed = pendingClaims.some((claim) => claim.installmentId === item.id);
+        const paid = item.remainingMinor <= 0n;
+        const overdue = !paid && item.dueOn < now;
+        const row = <Entry
+          date={formatDay(item.dueOn)}
+          title={item.title}
+          sub={!paid && item.receivedMinor > 0n ? `платено ${formatCents(item.receivedMinor, item.currency)}` : null}
+          amount={formatCents(cents(item.amount), item.currency)}
+          badge={paid ? <Badge variant="success-soft">Платено</Badge> : claimed ? <Badge variant="warning-soft">Чака фирмата</Badge> : overdue ? <Badge variant="danger-soft">Просрочено</Badge> : null}
+        />;
+        return <li key={item.id} className="py-3">
+          {!paid && !claimed && canAct
+            ? <ClaimPaymentRow row={row} trigger="Платих" portalPublicId={portalPublicId} offerId={item.offerId} installmentId={item.id} amount={(Number(item.remainingMinor) / 100).toFixed(2)} />
+            : row}
+        </li>;
+      })}</ol>
     </section> : null}
 
-    {showPending && (section === "all" || section === "summary") && state.pendingDocuments.length ? <section className="rounded-2xl border border-primary/30 bg-primary/5 p-5"><h2 className="font-semibold">Чакат решение от клиента</h2><div className="mt-2 space-y-2">{state.pendingDocuments.map((item) => <Link key={item.id} href={portalPublicId ? `/portal/${portalPublicId}/changes/${item.id}` : `/app/offers/${item.id}`} className="flex justify-between gap-3 text-sm text-primary underline"><span>{item.kind === "offer" ? "Оферта" : "Промяна"}: {item.title}</span><span>{item.total} {item.currency}</span></Link>)}</div></section> : null}
-
-    {(section === "all" || section === "work") ? <section className="rounded-2xl border bg-card p-5"><h2 className="text-lg font-semibold">Етапи и срокове</h2>
-      {state.milestones.find((item) => item.status !== "completed") ? <p className="mt-2 text-sm font-medium">Следващ етап: {state.milestones.find((item) => item.status !== "completed")?.title}</p> : null}
-      {state.milestones.length ? <div className="mt-3 divide-y">{state.milestones.map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm"><div><p className="font-medium">{item.title}</p><p className="text-muted-foreground">До {item.dueOn}{item.completedAt ? ` · завършен ${item.completedAt.toLocaleDateString("bg-BG")}` : ""}</p></div><span className={`rounded-full px-2 py-1 text-xs ${item.status !== "completed" && item.dueOn < today ? "bg-destructive/10 text-destructive" : "bg-muted"}`}>{item.status !== "completed" && item.dueOn < today ? "Просрочен" : item.status !== "completed" && item.dueOn <= nextWeek ? "Наближава" : stageLabels[item.status] ?? item.status}</span></div>)}</div> : <EmptyResult className="mt-3" title="Още няма планирани етапи." />}
-    </section> : null}
-
-    {showPayments && (section === "all" || section === "payments") ? <section className="rounded-2xl border bg-card p-5"><h2 className="text-lg font-semibold">Плащания</h2>
-      <p className="mt-1 text-sm text-muted-foreground">Планирано: {formatCents(state.plannedMinor, state.currency)} · Получено: {formatCents(state.paidMinor, state.currency)}</p>
-      <h3 className="mt-5 font-semibold">Предстоящи вноски</h3>
-      {state.installments.length ? <div className="mt-2 divide-y">{state.installments.map((item) => <div key={item.id} className="flex justify-between gap-3 py-2 text-sm"><span>{paymentLabels[item.kind]} · {item.title} · до {item.dueOn}<small className="block text-muted-foreground">Получено {formatCents(item.receivedMinor, item.currency)} · остава {formatCents(item.remainingMinor, item.currency)}</small></span><strong>{Number(item.amount).toFixed(2)} {item.currency}</strong></div>)}</div> : <EmptyResult className="mt-2" title="Няма записан платежен план." />}
-      <h3 className="mt-5 font-semibold">Получени суми</h3>
-      {state.receipts.length ? <div className="mt-2 divide-y">{state.receipts.map((item) => <div key={item.id} className="grid gap-2 py-3 text-sm sm:grid-cols-[1fr_auto]"><div><p>{item.receivedOn} · {item.correctionOfId ? Number(item.amount) < 0 ? "Сторно" : "Корекция" : paymentLabels[item.kind]} · {methodLabels[item.method] ?? item.method}{item.note && !portalPublicId ? ` · ${item.note}` : ""}</p>{item.dispute?.status === "open" ? <p className="font-medium text-destructive">Оспорено от клиента · {item.dispute.reason}</p> : item.dispute?.status === "resolved" ? <p className="text-muted-foreground">Спорът е разрешен: {item.dispute.resolution}</p> : null}{portalPublicId && Number(item.amount) > 0 && !item.dispute && !item.correctionOfId ? <form action={disputePaymentAction} className="mt-2 flex gap-2"><input type="hidden" name="projectPublicId" value={portalPublicId} /><input type="hidden" name="receiptId" value={item.id} /><Input name="reason" required minLength={5} maxLength={1000} placeholder="Опиши несъответствието" className="h-9 min-w-0 flex-1 bg-background" /><Button type="submit" variant="outline" className="h-9">Оспори</Button></form> : null}</div><strong>{Number(item.amount).toFixed(2)} {item.currency}</strong></div>)}</div> : <EmptyResult className="mt-2" title="Още няма получени плащания." />}
-      {state.receiptsTotal > state.receipts.length ? <p className="mt-2 text-xs text-muted-foreground">
-        Показани са последните {state.receipts.length} от общо {state.receiptsTotal} плащания. Сумата „Получено“ включва всички.
-        {receiptsHref ? <> <Link href={receiptsHref} className="font-medium text-primary underline">Всички плащания</Link></> : null}
-      </p> : null}
-    </section> : null}
+    <section className="space-y-2">
+      <PaperLabel>Плащания</PaperLabel>
+      {view.receipts.length || pendingClaims.length || rejected.length ? <ol className="divide-y divide-dashed rounded-2xl border bg-card px-5">
+        {[...pendingClaims, ...rejected].map((claim) => <li key={claim.id} className="py-3">
+          <Entry
+            date={formatDay(claim.paidOn)}
+            title="Отбелязано от теб"
+            sub={claim.status === "pending" ? "влиза в платеното, след като фирмата го потвърди" : null}
+            amount={<span className="text-muted-foreground">{formatCents(cents(claim.amount), claim.currency)}</span>}
+            badge={claim.status === "pending" ? <Badge variant="warning-soft">Чака фирмата</Badge> : <Badge variant="danger-soft">Непотвърдено</Badge>}
+          />
+          {claim.response ? <Quote by="Фирмата:" tone="warning" className="mt-2 sm:ml-[6.25rem]">{claim.response}</Quote> : null}
+        </li>)}
+        {view.receipts.map((item) => {
+          const row = <Entry
+            date={formatDay(item.receivedOn)}
+            title={receiptLabel(item)}
+            sub={methodLabels[item.method] ?? item.method}
+            amount={<span className={cn(Number(item.amount) < 0 && "text-muted-foreground")}>{formatCents(cents(item.amount), item.currency)}</span>}
+            badge={item.dispute?.status === "open" ? <Badge variant="danger-soft">Оспорено</Badge> : null}
+          />;
+          const canDispute = canAct && Number(item.amount) > 0 && item.dispute?.status !== "open" && !item.correctionOfId;
+          return <li key={item.id} className="py-3">
+            {canDispute ? <DisputeReceiptRow row={row} portalPublicId={portalPublicId} receiptId={item.id} /> : row}
+            {item.dispute?.status === "open" ? <Quote by="Оспорено от теб:" tone="danger" className="mt-2 sm:ml-[6.25rem]">{item.dispute.reason}</Quote>
+              : item.dispute?.status === "resolved" ? <Quote by="Фирмата:" className="mt-2 sm:ml-[6.25rem]">{item.dispute.resolution}</Quote> : null}
+          </li>;
+        })}
+      </ol> : <p className="rounded-2xl border bg-card px-5 py-4 text-sm text-muted-foreground">Още няма записани плащания.</p>}
+    </section>
   </div>;
 }

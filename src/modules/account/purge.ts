@@ -68,7 +68,7 @@ export async function purgeDueAccounts(now = new Date()) {
   return result;
 }
 
-const COMPANY_BUCKETS = ["order-files", "change-attachments", "decision-signatures"];
+const COMPANY_BUCKETS = ["order-files", "change-attachments", "decision-signatures", "organization-logos"];
 
 /** Storage has no recursive delete: list each folder under `<orgId>/` and remove what is in it. */
 async function removeCompanyFiles(admin: ReturnType<typeof createAdminClient>, organizationId: string) {

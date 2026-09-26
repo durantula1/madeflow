@@ -9,7 +9,7 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ActionForm, ActionSubmit } from "@/components/workspace/action-form";
-import { ConfirmAction } from "@/components/workspace/confirm-action";
+import { ConfirmDialog } from "@/components/workspace/confirm-dialog";
 import { DataTable } from "@/components/workspace/data-table";
 import { FilterSelect } from "@/components/workspace/filter-select";
 import { FilterBar, ListPagination, SearchField } from "@/components/workspace/list-filters";
@@ -57,9 +57,9 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
     } />
     <Tabs defaultSelectedKey="members">
       <TabsList>
-        <TabsTrigger id="members">Членове ({counters.activeMembers})</TabsTrigger>
-        <TabsTrigger id="invites">Покани ({pendingInvites.length})</TabsTrigger>
-        <TabsTrigger id="approvals">Одобрения ({requests.length})</TabsTrigger>
+        <TabsTrigger id="members">Членове</TabsTrigger>
+        <TabsTrigger id="invites">Покани</TabsTrigger>
+        <TabsTrigger id="approvals">Одобрения</TabsTrigger>
       </TabsList>
       <TabsContent id="members" className="flex flex-col gap-4 pt-4">
         <FilterBar>
@@ -102,7 +102,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
               roleLabel(invite),
               invite.role === "owner" || invite.allProjects ? "Всички" : invite.projectIds.length ? String(invite.projectIds.length) : "Няма",
               invite.expiresAt.toLocaleDateString("bg-BG"),
-              <ConfirmAction key={invite.id} label="Отмени поканата" description={`Поканата за ${invite.email} ще стане невалидна.`} action={revokeTeamInviteAction} field="inviteId" value={invite.id} success="Поканата е отменена" />,
+              <ConfirmDialog key={invite.id} trigger={<Button type="button" variant="destructive" size="sm">Отмени поканата</Button>} title="Да отменя ли поканата?" description={`Линкът в поканата за ${invite.email} спира да работи. Можеш да поканиш човека отново.`} confirmLabel="Отмени поканата" action={revokeTeamInviteAction} fields={{ inviteId: invite.id }} success="Поканата е отменена" />,
             ],
           }))}
         /> : <EmptyState title="Няма чакащи покани" />}

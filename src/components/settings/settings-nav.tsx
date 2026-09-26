@@ -2,15 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Building2, CircleUserRound, KeyRound, ShieldCheck } from "lucide-react";
+import { Bell, Building2, CircleUserRound, ShieldCheck } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 const personal = [
-  { href: "/app/settings", label: "Профил", icon: CircleUserRound },
+  { href: "/app/settings", label: "Профил и вход", icon: CircleUserRound },
   { href: "/app/settings/notifications", label: "Известия", icon: Bell },
-  { href: "/app/settings/security", label: "Сигурност", icon: KeyRound },
-  { href: "/app/settings/privacy", label: "Данни и поверителност", icon: ShieldCheck },
+  { href: "/app/settings/privacy", label: "Данни и акаунт", icon: ShieldCheck },
 ];
 const company = [{ href: "/app/settings/organization", label: "Фирма", icon: Building2 }];
 

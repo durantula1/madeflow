@@ -11,6 +11,7 @@ import { maskEmail } from "@/lib/email/send";
 import { clientIp } from "@/lib/http/client-ip";
 import { getPortalSession, isOrganizationStaff } from "@/modules/change-portal/session";
 import { checkOtp, consumeOtp, issueOtp } from "@/modules/change-portal/verification";
+import { notifyProjectStaff } from "@/modules/notifications/staff";
 
 export type VerificationState = { error?: string; otpId?: string; sentTo?: string; step?: "claim" | "email_change"; done?: boolean };
 
@@ -82,6 +83,14 @@ export async function confirmVerificationCodeAction(_: VerificationState, formDa
         eventType: previousEmail && session.contactEmailVerifiedAt && previousEmail !== otp.email ? "contact_email_changed" : "contact_verified",
         visibility: "client",
         metadata: { email: maskEmail(otp.email), ip },
+      });
+      // Whoever confirms first owns the contact. The company hears about it, so a link that reached
+      // the wrong person is caught early and an owner can reset the confirmation.
+      await notifyProjectStaff(tx, {
+        organizationId: session.organizationId, projectId: session.projectId, eventType: "contact_verified",
+        title: `${session.contactName} потвърди имейл ${maskEmail(otp.email)}`,
+        body: "Кодовете за решенията ще идват на този имейл. Ако не е на клиента, нулирай потвърждението от „Достъп на клиента“.",
+        href: `/app/projects/${session.projectId}?panel=client`,
       });
     });
     revalidatePath(`/portal/${data.projectPublicId}`, "layout");

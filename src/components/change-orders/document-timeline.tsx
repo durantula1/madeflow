@@ -3,6 +3,7 @@ import { Download } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DocumentStatusBadge } from "@/components/change-orders/document-status-badge";
+import { DownloadLink } from "@/components/workspace/download-tray";
 import { EmptyResult } from "@/components/workspace/page/empty-result";
 import { cn } from "@/lib/utils";
 
@@ -23,22 +24,41 @@ const eventLabels: Record<string, string> = {
   portal_staff_session_blocked: "Блокиран опит за решение от служебен профил",
   attachment_added: "Прикачен файл",
   attachment_removed: "Премахнат файл",
+  revision_canceled: "Новата версия е оттеглена; в сила остава одобрената",
+  document_canceled: "Анулиран",
+  milestone_added: "Добавен етап",
+  milestone_moved: "Преместен етап",
+  milestone_removed: "Премахнат етап",
+  milestone_status_changed: "Обновен етап",
+  milestones_from_offer_schedule: "Етапите от графика получиха дати",
+  payment_received: "Записано плащане",
+  payment_corrected: "Коригирано плащане",
+  payment_assigned: "Плащане отнесено към офертата",
+  payment_plan_created: "Платежният план е създаден от условията",
+  acceptance_requested: "Поискано приемане на работата",
+  acceptance_accepted: "Клиентът прие работата",
+  acceptance_issues: "Клиентът изпрати забележки",
+  work_status_changed: "Обновен статус на работата",
 };
 
 /** Events worth a colored dot: the client's decisions and disputes. */
 const eventTones: Record<string, string> = {
-  decision_approved: "bg-tile-mint-foreground",
+  decision_approved: "bg-brand-green",
   decision_declined: "bg-tile-coral-foreground",
   decision_changes_requested: "bg-tile-coral-foreground",
   changes_requested: "bg-tile-coral-foreground",
   decision_disputed: "bg-tile-coral-foreground",
   revision_expired: "bg-tile-coral-foreground",
+  acceptance_accepted: "bg-brand-green",
+  acceptance_issues: "bg-tile-coral-foreground",
+  document_canceled: "bg-tile-coral-foreground",
 };
 
 const dateTime = (value: Date) => new Intl.DateTimeFormat("bg-BG", { dateStyle: "medium", timeStyle: "short" }).format(value);
 
-export function DocumentTimeline({ changeOrderId, revisions, events, olderEventsHref, latestEventsHref }: {
+export function DocumentTimeline({ changeOrderId, approvedRevisionId, revisions, events, olderEventsHref, latestEventsHref }: {
   changeOrderId: string;
+  approvedRevisionId: number | null;
   revisions: Array<{ id: number; revisionNumber: number; status: string; frozenAt: Date | null; total: string; currency: string }>;
   events: Array<{ id: number; eventType: string; createdAt: Date }>;
   olderEventsHref: string | null;
@@ -56,13 +76,15 @@ export function DocumentTimeline({ changeOrderId, revisions, events, olderEvents
                 <li key={revision.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
                   <span className="flex items-center gap-2 text-sm">
                     <span className="font-medium">Версия {revision.revisionNumber}</span>
-                    <DocumentStatusBadge status={revision.status} />
+                    {/* An earlier approval stays in the history; only the latest one is in force. */}
+                    <DocumentStatusBadge status={revision.status === "approved" && revision.id !== approvedRevisionId ? "superseded" : revision.status} />
+                    {revision.id === approvedRevisionId ? <span className="text-xs text-muted-foreground">в сила</span> : null}
                   </span>
                   <span className="flex items-center gap-3 text-sm">
                     <span className="tabular-nums text-muted-foreground">{Number(revision.total).toFixed(2)} {revision.currency}</span>
-                    <a href={`/api/changes/${changeOrderId}/pdf?revision=${revision.id}`} className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
+                    <DownloadLink href={`/api/changes/${changeOrderId}/pdf?revision=${revision.id}`} label={`PDF · версия ${revision.revisionNumber}`} className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
                       <Download className="size-3.5" /> PDF
-                    </a>
+                    </DownloadLink>
                   </span>
                 </li>
               ))}

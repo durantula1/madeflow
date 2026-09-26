@@ -14,13 +14,14 @@ export const projectStatLabels = {
 /** "Остава" and "Краен срок" turn coral when overdue, which is unknown while loading. */
 const projectStatTones: Record<keyof typeof projectStatLabels, StatTone> = { price: "mint", paid: "teal", remaining: "sand", deadline: "blue" };
 
-export const projectStatusLabels: Record<string, string> = { active: "Активен", completed: "Завършен", archived: "Архивиран" };
+export const projectStatusLabels: Record<string, string> = { active: "Активен", completed: "Приключен", archived: "В архива" };
 
 export const projectTabLabels = {
   overview: "Обзор",
-  documents: "Документи",
+  documents: "Оферти",
   work: "Работа",
   payments: "Плащания",
+  questions: "Въпроси",
   notes: "Бележки",
 };
 
@@ -35,7 +36,8 @@ export function ProjectPageSkeleton() {
         {(Object.keys(projectStatLabels) as Array<keyof typeof projectStatLabels>).map((key) => <StatCardSkeleton key={key} label={projectStatLabels[key]} tone={projectStatTones[key]} hint />)}
       </div>
       <div className="flex flex-col gap-2">
-        <TabsSkeleton labels={Object.values(projectTabLabels)} />
+        {/* "Въпроси" appears only once the client asked something, so the skeleton leaves it out. */}
+        <TabsSkeleton labels={Object.values(projectTabLabels).filter((label) => label !== projectTabLabels.questions)} />
         <div className="pt-4"><ProjectDashboardSkeleton /></div>
       </div>
     </PageShell>

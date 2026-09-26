@@ -4,6 +4,7 @@ import { and, asc, desc, eq, isNull } from "drizzle-orm";
 
 import { getDatabase } from "@/db";
 import { catalogItems, changeOrderLineItems, changeOrderRevisions, changeOrders, offerTemplates } from "@/db/schema";
+import { listRevisionSchedule } from "@/modules/change-orders/queries";
 
 export type CatalogOption = { id: string; name: string; unit: string | null; unitPrice: string; category: string | null };
 
@@ -38,6 +39,13 @@ export async function getOfferCopy(organizationId: string, changeOrderId: string
   }).from(changeOrders).innerJoin(changeOrderRevisions, eq(changeOrderRevisions.id, changeOrders.currentRevisionId))
     .where(and(eq(changeOrders.id, changeOrderId), eq(changeOrders.organizationId, organizationId), eq(changeOrders.documentKind, "offer"))).limit(1);
   if (!offer) return null;
-  const lines = await db.select().from(changeOrderLineItems).where(eq(changeOrderLineItems.revisionId, offer.revisionId)).orderBy(asc(changeOrderLineItems.position));
-  return { ...offer, lines: lines.map((line) => ({ description: line.description, quantity: Number(line.quantity), unit: line.unit ?? "", unitPrice: Number(line.unitPrice) })) };
+  const [lines, schedule] = await Promise.all([
+    db.select().from(changeOrderLineItems).where(eq(changeOrderLineItems.revisionId, offer.revisionId)).orderBy(asc(changeOrderLineItems.position)),
+    listRevisionSchedule(offer.revisionId),
+  ]);
+  return {
+    ...offer,
+    lines: lines.map((line) => ({ description: line.description, quantity: Number(line.quantity), unit: line.unit ?? "", unitPrice: Number(line.unitPrice) })),
+    schedule: schedule.map((item) => ({ title: item.title, durationDays: item.durationDays })),
+  };
 }

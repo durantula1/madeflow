@@ -1,19 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { startTransition, useContext, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
+import { OverlayTriggerStateContext } from "react-aria-components";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 
-export function ActionForm({ action, success, children, className, redirects = false }: {
+export function ActionForm({ action, success, children, className, redirects = false, onSuccess }: {
   action: (formData: FormData) => Promise<unknown>;
   success: string;
+  /** Runs after a successful action, e.g. to close the dialog around the form. */
+  onSuccess?: () => void;
   children: React.ReactNode;
   className?: string;
   redirects?: boolean;
 }) {
   const [error, setError] = useState<string | null>(null);
+  // Set inside the form's transition, so it commits together with the refreshed page: the toast and
+  // the closing dialog appear when the new row is already on screen, not seconds before it.
+  const [succeeded, setSucceeded] = useState(0);
+  // Set when the form sits inside a DialogTrigger, so a success closes that dialog.
+  const overlay = useContext(OverlayTriggerStateContext);
 
   async function submit(formData: FormData) {
     setError(null);
@@ -25,7 +33,7 @@ export function ActionForm({ action, success, children, className, redirects = f
         toast.error(result.error);
         return;
       }
-      if (!redirects) toast.success(success);
+      startTransition(() => setSucceeded((count) => count + 1));
     } catch (cause) {
       if (cause instanceof Error && cause.message.includes("NEXT_REDIRECT")) throw cause;
       const message = cause instanceof Error ? cause.message : "Действието не беше завършено. Опитай отново.";
@@ -33,6 +41,15 @@ export function ActionForm({ action, success, children, className, redirects = f
       toast.error(message);
     }
   }
+
+  useEffect(() => {
+    if (!succeeded) return;
+    if (!redirects) toast.success(success);
+    onSuccess?.();
+    overlay?.close();
+    // Runs once per success; the callbacks are read fresh each time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [succeeded]);
 
   return <form action={submit} className={className}>
     {children}

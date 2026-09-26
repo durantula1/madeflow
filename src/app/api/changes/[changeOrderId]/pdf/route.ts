@@ -18,7 +18,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/chang
   }
   if (!authorized) {
     const portal = await getPortalSession(document.publicId);
-    authorized = !!portal && portal.projectId === document.projectId && portal.scope.includes("view");
+    authorized = !!portal && portal.projectId === document.projectId;
   }
   if (!authorized) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const requested = new URL(request.url).searchParams.get("revision");

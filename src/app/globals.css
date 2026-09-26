@@ -48,6 +48,8 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-brand-green: var(--brand-green);
+  --color-brand-blue: var(--brand-blue);
   --color-tile-mint: var(--tile-mint);
   --color-tile-mint-foreground: var(--tile-mint-foreground);
   --color-tile-teal: var(--tile-teal);
@@ -89,8 +91,8 @@
   --secondary-foreground: #102b38;
   --muted: #e7efe9;
   --muted-foreground: #52707d;
-  --accent: #d8f2e7;
-  --accent-foreground: #0b5d4f;
+  --accent: #dcf3d1;
+  --accent-foreground: #102b38;
   --destructive: #c83b32;
   --border: color-mix(in srgb, #102b38 14%, transparent);
   --input: color-mix(in srgb, #102b38 18%, white);
@@ -101,11 +103,16 @@
   --chart-4: #bceba8;
   --chart-5: #102b38;
   --radius: 0.85rem;
+  /* The light green of the P mark (public/pakto-mark.svg). */
+  --brand-green: #bceba8;
+  /* Light blue of the palette (same as --chart-3); the download tray uses it on navy. */
+  --brand-blue: #a6d8df;
   /* Soft KPI tiles; each tone means something (see StatCard), never decoration. */
-  --tile-mint: #e2f5d8;
-  --tile-mint-foreground: #1d4a2b;
+  /* A tint of --brand-green; its text is the navy of the palette, not a dark green. */
+  --tile-mint: #dcf3d1;
+  --tile-mint-foreground: #102b38;
   --tile-teal: #dceeea;
-  --tile-teal-foreground: #0b5d4f;
+  --tile-teal-foreground: #102b38;
   --tile-blue: #deeff2;
   --tile-blue-foreground: #18394c;
   --tile-sand: #f8ead0;
@@ -207,5 +214,54 @@
 @media (prefers-reduced-motion: reduce) {
   .skeleton {
     animation: skeleton-in 1ms linear 150ms both;
+  }
+}
+
+/* Download tray (DownloadTray): a light-blue stripe runs while the server is still preparing the file. */
+@keyframes download-indeterminate {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(260%); }
+}
+.download-indeterminate {
+  animation: download-indeterminate 1.1s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .download-indeterminate {
+    animation: none;
+    transform: translateX(75%);
+  }
+}
+
+/*
+ * Workspace navigation feedback (NavigationProgress). The bar runs from the click until the URL
+ * commits; it slows down as it goes so a long wait never looks finished. If the router is still
+ * waiting on the server after 400ms, the old page dims so it clearly is not the new one.
+ */
+@keyframes nav-progress-grow {
+  from { transform: scaleX(0.08); }
+  to { transform: scaleX(0.94); }
+}
+.nav-progress[data-state="loading"] {
+  animation: nav-progress-grow 12s cubic-bezier(0.05, 0.75, 0.15, 1) both;
+}
+.nav-progress[data-state="done"] {
+  transform: scaleX(1);
+  opacity: 0;
+  transition: transform 150ms ease-out, opacity 200ms ease-out 100ms;
+}
+html[data-navigating] {
+  cursor: progress;
+}
+html[data-navigating] #workspace-shell main {
+  opacity: 0.6;
+  transition: opacity 200ms ease-out 400ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-progress[data-state="loading"] {
+    animation: none;
+    transform: scaleX(0.6);
+  }
+  .nav-progress[data-state="done"] {
+    transition: none;
   }
 }

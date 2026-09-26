@@ -3,10 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { Button as AriaButton, Header } from "react-aria-components";
-import { Building2, ChevronsUpDown, CircleUserRound, KeyRound, LogOut, ShieldCheck } from "lucide-react";
+import { Bell, Building2, ChevronsUpDown, CircleUserRound, LogOut, ShieldCheck } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { startNavigationProgress } from "@/components/workspace/navigation-progress";
 import { cn } from "@/lib/utils";
 import { signOutAction } from "@/modules/auth/actions";
 
@@ -38,15 +39,18 @@ export function UserMenu({ name, email, roleLabel, organizationName, owner, vari
   const router = useRouter();
   const [signingOut, startSignOut] = useTransition();
   const links = [
-    { id: "/app/settings", label: "Профил", icon: CircleUserRound },
-    { id: "/app/settings/security", label: "Сигурност", icon: KeyRound },
-    { id: "/app/settings/privacy", label: "Данни и поверителност", icon: ShieldCheck },
+    { id: "/app/settings", label: "Профил и вход", icon: CircleUserRound },
+    { id: "/app/settings/notifications", label: "Известия", icon: Bell },
+    { id: "/app/settings/privacy", label: "Данни и акаунт", icon: ShieldCheck },
     ...(owner ? [{ id: "/app/settings/organization", label: "Фирма", icon: Building2 }] : []),
   ];
 
   function onAction(key: React.Key) {
     if (key === "sign-out") startSignOut(() => signOutAction());
-    else router.push(String(key));
+    else {
+      startNavigationProgress(String(key));
+      router.push(String(key));
+    }
   }
 
   return (

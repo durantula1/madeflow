@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { Wordmark } from "@/components/brand/wordmark";
 import { PortalDisputeForm } from "@/components/portal/dispute-form";
+import { BillLine, Quote } from "@/components/portal/paper";
 import { Card, CardContent } from "@/components/ui/card";
 import { getDisputeTarget, parseDisputeToken } from "@/modules/change-portal/dispute";
 
@@ -29,13 +30,12 @@ export default async function DisputePage({ params, searchParams }: PageProps<"/
             <p className="text-sm text-muted-foreground">{target.organizationName}</p>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight">Оспорване на решение</h1>
           </div>
-          <div className="rounded-xl border p-4 text-sm leading-6">
-            <p className="font-medium">{target.title} · версия {target.revisionNumber}</p>
-            <p>{Number(target.total).toFixed(2)} {target.currency}</p>
-            <p className="text-muted-foreground">
+          <div className="space-y-1.5">
+            <BillLine label={`${target.title} · версия ${target.revisionNumber}`} amount={`${Number(target.total).toFixed(2)} ${target.currency}`} />
+            <Quote className="text-muted-foreground">
               {labels[target.decision]} от „{target.typedName}“ на{" "}
               {new Intl.DateTimeFormat("bg-BG", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Sofia" }).format(target.createdAt)}
-            </p>
+            </Quote>
           </div>
           {target.disputed || query.done ? (
             <p className="rounded-xl bg-primary/10 p-4 text-sm font-medium text-primary">

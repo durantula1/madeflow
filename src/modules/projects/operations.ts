@@ -1,34 +1,30 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getDatabase } from "@/db";
 import {
-  changeOrderRevisions, changeOrders, paymentDisputes,
+  changeOrderPaymentTerms, changeOrderRevisions, changeOrderScheduleItems, changeOrders, offerAcceptances, paymentClaims, paymentDisputes,
   paymentInstallments, projectMilestones, projectReceipts, timelineEvents,
 } from "@/db/schema";
+import { attempt, type ActionResult } from "@/lib/action-result";
 import { requireProjectCapability } from "@/lib/authz/project-access";
 import { requireTenantContext } from "@/lib/authz/tenant-context";
+import { formatDay } from "@/modules/change-orders/labels";
+import { emailClient } from "@/modules/notifications/client";
+import { requireActiveProject } from "@/modules/projects/lifecycle";
+
+type Transaction = Parameters<Parameters<ReturnType<typeof getDatabase>["transaction"]>[0]>[0];
+type Executor = Pick<Transaction, "select">;
 
 const uuid = z.uuid();
-const projectIdFrom = (formData: FormData) => uuid.parse(formData.get("projectId"));
+const optionalUuid = z.union([z.literal(""), z.literal("none"), z.uuid()]).optional().transform((value) => (value && value !== "none" ? value : null));
 const paymentKind = z.enum(["deposit", "progress", "final", "other"]);
-
-function moneyInput(value: FormDataEntryValue | null) {
-  const number = z.coerce.number().positive().max(999999999).parse(value);
-  return number.toFixed(2);
-}
-
-async function currencyFor(organizationId: string, projectId: string) {
-  const [offer] = await getDatabase().select({ currency: changeOrderRevisions.currency })
-    .from(changeOrders).innerJoin(changeOrderRevisions, eq(changeOrderRevisions.id, changeOrders.currentRevisionId))
-    .where(and(eq(changeOrders.organizationId, organizationId), eq(changeOrders.projectId, projectId), eq(changeOrders.documentKind, "offer")))
-    .limit(1);
-  if (!offer) throw new Error("Създай основна оферта преди платежния план.");
-  return "EUR";
-}
+const paymentMethod = z.enum(["cash", "bank", "card", "other"]);
+const methodLabels: Record<string, string> = { cash: "в брой", bank: "банков превод", card: "карта", other: "друго" };
+const money = z.coerce.number().positive("Сумата трябва да е над 0.").max(999999999).transform((value) => value.toFixed(2));
 
 function refresh(projectId: string) {
   revalidatePath(`/app/projects/${projectId}`);
@@ -36,135 +32,455 @@ function refresh(projectId: string) {
   revalidatePath("/app");
 }
 
-export async function addMilestoneAction(formData: FormData) {
-  const context = await requireTenantContext();
-  const projectId = projectIdFrom(formData);
-  await requireProjectCapability(context, projectId, "milestone");
-  const title = z.string().trim().min(2).max(180).parse(formData.get("title"));
-  const dueOn = z.iso.date().parse(formData.get("dueOn"));
-  const changeOrderId = formData.get("changeOrderId") ? uuid.parse(formData.get("changeOrderId")) : null;
-  if (changeOrderId) {
-    const [change] = await getDatabase().select({ status: changeOrderRevisions.status }).from(changeOrders)
-      .innerJoin(changeOrderRevisions, eq(changeOrderRevisions.id, changeOrders.currentRevisionId))
-      .where(and(eq(changeOrders.id, changeOrderId), eq(changeOrders.projectId, projectId), eq(changeOrders.organizationId, context.organizationId), eq(changeOrderRevisions.status, "approved"))).limit(1);
-    if (!change) throw new Error("Допълнителната работа още не е одобрена.");
+/** A base offer of this project, or null for project level. */
+async function offerOf(db: Executor, organizationId: string, projectId: string, offerId: string | null) {
+  if (!offerId) return null;
+  const [offer] = await db.select({ id: changeOrders.id }).from(changeOrders)
+    .where(and(eq(changeOrders.id, offerId), eq(changeOrders.projectId, projectId), eq(changeOrders.organizationId, organizationId), eq(changeOrders.documentKind, "offer"))).limit(1);
+  if (!offer) throw new Error("Офертата не е от този обект.");
+  return offer.id;
+}
+
+/**
+ * A stage may point at one approved change; it then belongs to that change's offer. Otherwise it
+ * belongs to the chosen offer, or to the project as a whole.
+ */
+async function stageOwner(db: Executor, organizationId: string, projectId: string, input: { changeOrderId: string | null; offerId: string | null }) {
+  if (input.changeOrderId) {
+    const [change] = await db.select({ id: changeOrders.id, offerId: changeOrders.baselineOfferId }).from(changeOrders)
+      .where(and(eq(changeOrders.id, input.changeOrderId), eq(changeOrders.projectId, projectId), eq(changeOrders.organizationId, organizationId), eq(changeOrders.documentKind, "change"), isNotNull(changeOrders.approvedRevisionId))).limit(1);
+    if (!change) throw new Error("Промяната още не е одобрена.");
+    return { changeOrderId: change.id, offerId: change.offerId };
   }
-  await getDatabase().transaction(async (tx) => {
-    await tx.insert(projectMilestones).values({ organizationId: context.organizationId, projectId, changeOrderId, title, dueOn, createdBy: context.userId });
-    await tx.insert(timelineEvents).values({ organizationId: context.organizationId, projectId, actorType: "staff", actorId: context.userId, eventType: "milestone_added", visibility: "client", metadata: { title, dueOn } });
-  });
-  refresh(projectId);
+  return { changeOrderId: null, offerId: await offerOf(db, organizationId, projectId, input.offerId) };
 }
 
-export async function updateMilestoneAction(formData: FormData) {
-  const context = await requireTenantContext();
-  const projectId = projectIdFrom(formData);
-  await requireProjectCapability(context, projectId, "milestone");
-  const milestoneId = uuid.parse(formData.get("milestoneId"));
-  const status = z.enum(["planned", "in_progress", "completed"]).parse(formData.get("status"));
-  const db = getDatabase();
-  await db.transaction(async (tx) => {
-    const [milestone] = await tx.update(projectMilestones)
-      .set({ status, completedAt: status === "completed" ? new Date() : null, updatedAt: new Date() })
-      .where(and(eq(projectMilestones.id, milestoneId), eq(projectMilestones.projectId, projectId), eq(projectMilestones.organizationId, context.organizationId)))
-      .returning({ title: projectMilestones.title });
-    if (!milestone) throw new Error("Етапът не е намерен.");
-    await tx.insert(timelineEvents).values({ organizationId: context.organizationId, projectId, actorType: "staff", actorId: context.userId, eventType: "milestone_status_changed", visibility: "client", metadata: { title: milestone.title, status } });
-  });
-  refresh(projectId);
+/** Installments generated from a "after a stage" term follow the stage's date. */
+async function syncStageInstallments(tx: Transaction, milestoneId: string, dueOn: string) {
+  await tx.update(paymentInstallments).set({ dueOn, updatedAt: new Date() })
+    .where(and(eq(paymentInstallments.milestoneId, milestoneId), isNotNull(paymentInstallments.termId)));
 }
 
-export async function addInstallmentAction(formData: FormData) {
-  const context = await requireTenantContext();
-  const projectId = projectIdFrom(formData);
-  await requireProjectCapability(context, projectId, "manage");
-  const title = z.string().trim().min(2).max(180).parse(formData.get("title"));
-  const dueOn = z.iso.date().parse(formData.get("dueOn"));
-  const kind = paymentKind.parse(formData.get("kind"));
-  const amount = moneyInput(formData.get("amount"));
-  const milestoneId = formData.get("milestoneId") ? uuid.parse(formData.get("milestoneId")) : null;
-  if (milestoneId) {
-    const [milestone] = await getDatabase().select({ id: projectMilestones.id }).from(projectMilestones)
-      .where(and(eq(projectMilestones.id, milestoneId), eq(projectMilestones.projectId, projectId))).limit(1);
-    if (!milestone) throw new Error("Етапът не принадлежи на този обект.");
-  }
-  await getDatabase().insert(paymentInstallments).values({ organizationId: context.organizationId, projectId, milestoneId, kind, title, amount, currency: await currencyFor(context.organizationId, projectId), dueOn, createdBy: context.userId });
-  refresh(projectId);
+const milestoneFields = z.object({
+  projectId: uuid,
+  title: z.string().trim().min(2, "Името е твърде кратко.").max(180),
+  dueOn: z.iso.date("Избери срок."),
+  /** "offer:<id>", "change:<id>" or "project" */
+  work: z.string().optional(),
+  reason: z.string().trim().max(300).optional(),
+});
+
+function parseWork(work: string | undefined) {
+  if (work?.startsWith("change:")) return { changeOrderId: uuid.parse(work.slice(7)), offerId: null };
+  if (work?.startsWith("offer:")) return { changeOrderId: null, offerId: uuid.parse(work.slice(6)) };
+  return { changeOrderId: null, offerId: null };
 }
 
-export async function recordReceiptAction(formData: FormData) {
-  const context = await requireTenantContext();
-  const projectId = projectIdFrom(formData);
-  await requireProjectCapability(context, projectId, "payment");
-  const installmentId = formData.get("installmentId") ? uuid.parse(formData.get("installmentId")) : null;
-  const kind = paymentKind.parse(formData.get("kind"));
-  const amount = moneyInput(formData.get("amount"));
-  const method = z.enum(["cash", "bank", "card", "other"]).parse(formData.get("method"));
-  const receivedOn = z.iso.date().parse(formData.get("receivedOn"));
-  const note = z.string().trim().max(500).parse(formData.get("note") ?? "");
+export async function addMilestoneAction(formData: FormData): Promise<ActionResult> {
+  return attempt(async () => {
+    const data = milestoneFields.parse(Object.fromEntries(formData));
+    const context = await requireTenantContext();
+    await requireProjectCapability(context, data.projectId, "milestone");
+    await requireActiveProject(context.organizationId, data.projectId);
+    const db = getDatabase();
+    const owner = await stageOwner(db, context.organizationId, data.projectId, parseWork(data.work));
+    await db.transaction(async (tx) => {
+      await tx.insert(projectMilestones).values({ organizationId: context.organizationId, projectId: data.projectId, ...owner, title: data.title, dueOn: data.dueOn, createdBy: context.userId });
+      await tx.insert(timelineEvents).values({ organizationId: context.organizationId, projectId: data.projectId, changeOrderId: owner.offerId, actorType: "staff", actorId: context.userId, eventType: "milestone_added", visibility: "client", metadata: { title: data.title, dueOn: data.dueOn, offerId: owner.offerId } });
+    });
+    refresh(data.projectId);
+  }, "Етапът не беше добавен.");
+}
+
+/**
+ * Turns an approved offer's indicative schedule into dated stages. The company picks the dates
+ * (a start date, then adjusts each); lines that already became stages (in any version) are skipped.
+ */
+export async function createStagesFromScheduleAction(formData: FormData): Promise<ActionResult> {
+  return attempt(async () => {
+    const { projectId, offerId, stages } = z.object({
+      projectId: uuid,
+      offerId: uuid,
+      stages: z.string().transform((value, context) => {
+        try { return JSON.parse(value) as unknown; }
+        catch { context.addIssue({ code: "custom", message: "Етапите не са валидни." }); return z.NEVER; }
+      }).pipe(z.array(z.object({ scheduleItemId: z.number().int().positive(), title: z.string().trim().min(2).max(180), dueOn: z.iso.date("Всеки етап има нужда от срок.") })).min(1, "Няма етапи за създаване.").max(20)),
+    }).parse(Object.fromEntries(formData));
+    const context = await requireTenantContext();
+    await requireProjectCapability(context, projectId, "milestone");
+    await requireActiveProject(context.organizationId, projectId);
+    await getDatabase().transaction(async (tx) => {
+      // Only lines of the version in force of this offer, and only once each.
+      const [offer] = await tx.select({ revisionId: changeOrders.approvedRevisionId }).from(changeOrders)
+        .where(and(eq(changeOrders.id, offerId), eq(changeOrders.projectId, projectId), eq(changeOrders.organizationId, context.organizationId), eq(changeOrders.documentKind, "offer"), isNotNull(changeOrders.approvedRevisionId))).limit(1);
+      if (!offer?.revisionId) throw new Error("Офертата още не е одобрена.");
+      const items = await tx.select({ id: changeOrderScheduleItems.id, lineKey: changeOrderScheduleItems.lineKey }).from(changeOrderScheduleItems)
+        .where(and(eq(changeOrderScheduleItems.revisionId, offer.revisionId), inArray(changeOrderScheduleItems.id, stages.map((stage) => stage.scheduleItemId))));
+      const keyOf = new Map(items.map((item) => [item.id, item.lineKey]));
+      const planned = new Set((await tx.select({ key: projectMilestones.scheduleLineKey }).from(projectMilestones)
+        .where(and(eq(projectMilestones.projectId, projectId), eq(projectMilestones.offerId, offerId), isNotNull(projectMilestones.scheduleLineKey)))).map((row) => row.key));
+      const fresh = stages.filter((stage) => keyOf.has(stage.scheduleItemId) && !planned.has(keyOf.get(stage.scheduleItemId)!));
+      if (!fresh.length) throw new Error("Тези етапи вече са в графика.");
+      const created = await tx.insert(projectMilestones).values(fresh.map((stage) => ({
+        organizationId: context.organizationId, projectId, offerId, scheduleItemId: stage.scheduleItemId, scheduleLineKey: keyOf.get(stage.scheduleItemId)!,
+        title: stage.title, dueOn: stage.dueOn, createdBy: context.userId,
+      }))).returning({ id: projectMilestones.id, lineKey: projectMilestones.scheduleLineKey, dueOn: projectMilestones.dueOn });
+      // Installments "after this stage" now have a stage and its date.
+      for (const stage of created) {
+        const terms = await tx.select({ id: changeOrderPaymentTerms.id }).from(changeOrderPaymentTerms)
+          .where(and(eq(changeOrderPaymentTerms.revisionId, offer.revisionId), eq(changeOrderPaymentTerms.scheduleLineKey, stage.lineKey!)));
+        if (terms.length) await tx.update(paymentInstallments).set({ milestoneId: stage.id, dueOn: stage.dueOn, updatedAt: new Date() })
+          .where(and(eq(paymentInstallments.offerId, offerId), inArray(paymentInstallments.termId, terms.map((term) => term.id)), isNull(paymentInstallments.milestoneId)));
+      }
+      await tx.insert(timelineEvents).values({ organizationId: context.organizationId, projectId, changeOrderId: offerId, actorType: "staff", actorId: context.userId, eventType: "milestones_from_offer_schedule", visibility: "client", metadata: { count: fresh.length } });
+    });
+    refresh(projectId);
+  }, "Етапите не бяха създадени.");
+}
+
+/**
+ * Dates move with the site; the schedule is not part of what the client approved. A moved date is
+ * shown to the client with where it was and why, so a slip is never silent.
+ */
+export async function editMilestoneAction(formData: FormData): Promise<ActionResult> {
+  return attempt(async () => {
+    const data = milestoneFields.extend({ milestoneId: uuid }).parse(Object.fromEntries(formData));
+    const context = await requireTenantContext();
+    await requireProjectCapability(context, data.projectId, "milestone");
+    await requireActiveProject(context.organizationId, data.projectId);
+    const db = getDatabase();
+    const owner = await stageOwner(db, context.organizationId, data.projectId, parseWork(data.work));
+    await db.transaction(async (tx) => {
+      const [before] = await tx.select({ title: projectMilestones.title, dueOn: projectMilestones.dueOn, offerId: projectMilestones.offerId }).from(projectMilestones)
+        .where(and(eq(projectMilestones.id, data.milestoneId), eq(projectMilestones.projectId, data.projectId), eq(projectMilestones.organizationId, context.organizationId))).for("update").limit(1);
+      if (!before) throw new Error("Етапът не е намерен.");
+      const moved = before.dueOn !== data.dueOn;
+      if (moved && data.dueOn > before.dueOn && !data.reason) throw new Error("Напиши накратко защо етапът се отлага. Клиентът ще види причината.");
+      await tx.update(projectMilestones).set({
+        title: data.title, dueOn: data.dueOn, ...owner,
+        ...(moved ? { previousDueOn: before.dueOn, dueChangeReason: data.reason || null } : {}),
+        updatedAt: new Date(),
+      }).where(eq(projectMilestones.id, data.milestoneId));
+      if (moved) await syncStageInstallments(tx, data.milestoneId, data.dueOn);
+      await tx.insert(timelineEvents).values({
+        organizationId: context.organizationId, projectId: data.projectId, changeOrderId: owner.offerId, actorType: "staff", actorId: context.userId,
+        eventType: moved ? "milestone_moved" : "milestone_updated", visibility: moved ? "client" : "internal",
+        metadata: { title: data.title, dueOn: data.dueOn, previousTitle: before.title, previousDueOn: before.dueOn, reason: data.reason || null },
+      });
+    });
+    refresh(data.projectId);
+  }, "Етапът не беше записан.");
+}
+
+export async function deleteMilestoneAction(formData: FormData): Promise<ActionResult> {
+  return attempt(async () => {
+    const { projectId, milestoneId } = z.object({ projectId: uuid, milestoneId: uuid }).parse(Object.fromEntries(formData));
+    const context = await requireTenantContext();
+    await requireProjectCapability(context, projectId, "milestone");
+    await requireActiveProject(context.organizationId, projectId);
+    await getDatabase().transaction(async (tx) => {
+      const [installment] = await tx.select({ title: paymentInstallments.title }).from(paymentInstallments).where(eq(paymentInstallments.milestoneId, milestoneId)).limit(1);
+      if (installment) throw new Error(`Към етапа е вързана вноската „${installment.title}“. Първо я премести на друга дата.`);
+      const [removed] = await tx.delete(projectMilestones)
+        .where(and(eq(projectMilestones.id, milestoneId), eq(projectMilestones.projectId, projectId), eq(projectMilestones.organizationId, context.organizationId)))
+        .returning({ title: projectMilestones.title, dueOn: projectMilestones.dueOn, offerId: projectMilestones.offerId });
+      if (!removed) throw new Error("Етапът не е намерен.");
+      await tx.insert(timelineEvents).values({ organizationId: context.organizationId, projectId, changeOrderId: removed.offerId, actorType: "staff", actorId: context.userId, eventType: "milestone_removed", visibility: "client", metadata: removed });
+    });
+    refresh(projectId);
+  }, "Етапът не беше изтрит.");
+}
+
+export async function updateMilestoneAction(formData: FormData): Promise<ActionResult> {
+  return attempt(async () => {
+    const { projectId, milestoneId, status } = z.object({ projectId: uuid, milestoneId: uuid, status: z.enum(["planned", "in_progress", "completed"]) }).parse(Object.fromEntries(formData));
+    const context = await requireTenantContext();
+    await requireProjectCapability(context, projectId, "milestone");
+    await requireActiveProject(context.organizationId, projectId);
+    await getDatabase().transaction(async (tx) => {
+      const [milestone] = await tx.update(projectMilestones)
+        .set({ status, completedAt: status === "completed" ? new Date() : null, updatedAt: new Date() })
+        .where(and(eq(projectMilestones.id, milestoneId), eq(projectMilestones.projectId, projectId), eq(projectMilestones.organizationId, context.organizationId)))
+        .returning({ title: projectMilestones.title, offerId: projectMilestones.offerId });
+      if (!milestone) throw new Error("Етапът не е намерен.");
+      await tx.insert(timelineEvents).values({ organizationId: context.organizationId, projectId, changeOrderId: milestone.offerId, actorType: "staff", actorId: context.userId, eventType: "milestone_status_changed", visibility: "client", metadata: { title: milestone.title, status } });
+    });
+    refresh(projectId);
+  }, "Етапът не беше обновен.");
+}
+
+const installmentFields = z.object({
+  projectId: uuid,
+  offerId: optionalUuid,
+  milestoneId: optionalUuid,
+  title: z.string().trim().min(2, "Въведи име на вноската.").max(180),
+  dueOn: z.iso.date("Избери падеж."),
+  kind: paymentKind,
+  amount: money,
+});
+
+async function checkedStage(db: Executor, projectId: string, milestoneId: string | null, offerId: string | null) {
+  if (!milestoneId) return null;
+  const [milestone] = await db.select({ id: projectMilestones.id, offerId: projectMilestones.offerId }).from(projectMilestones)
+    .where(and(eq(projectMilestones.id, milestoneId), eq(projectMilestones.projectId, projectId))).limit(1);
+  if (!milestone) throw new Error("Етапът не принадлежи на този обект.");
+  if (milestone.offerId !== offerId) throw new Error("Етапът е от друга оферта.");
+  return milestone.id;
+}
+
+/** A planned installment added by hand (outside the offer's payment terms, or when it has none). */
+export async function addInstallmentAction(formData: FormData): Promise<ActionResult> {
+  return attempt(async () => {
+    const data = installmentFields.parse(Object.fromEntries(formData));
+    const context = await requireTenantContext();
+    await requireProjectCapability(context, data.projectId, "payment");
+    await requireActiveProject(context.organizationId, data.projectId, { allowCompleted: true });
+    const db = getDatabase();
+    const offerId = await offerOf(db, context.organizationId, data.projectId, data.offerId);
+    const milestoneId = await checkedStage(db, data.projectId, data.milestoneId, offerId);
+    await db.insert(paymentInstallments).values({ organizationId: context.organizationId, projectId: data.projectId, offerId, milestoneId, kind: data.kind, title: data.title, amount: data.amount, currency: "EUR", dueOn: data.dueOn, createdBy: context.userId });
+    refresh(data.projectId);
+  }, "Вноската не беше добавена.");
+}
+
+export async function editInstallmentAction(formData: FormData): Promise<ActionResult> {
+  return attempt(async () => {
+    const data = installmentFields.extend({ installmentId: uuid }).parse(Object.fromEntries(formData));
+    const context = await requireTenantContext();
+    await requireProjectCapability(context, data.projectId, "payment");
+    await requireActiveProject(context.organizationId, data.projectId, { allowCompleted: true });
+    const db = getDatabase();
+    const offerId = await offerOf(db, context.organizationId, data.projectId, data.offerId);
+    const milestoneId = await checkedStage(db, data.projectId, data.milestoneId, offerId);
+    const [row] = await db.update(paymentInstallments).set({ offerId, milestoneId, kind: data.kind, title: data.title, amount: data.amount, dueOn: data.dueOn, updatedAt: new Date() })
+      .where(and(eq(paymentInstallments.id, data.installmentId), eq(paymentInstallments.projectId, data.projectId), eq(paymentInstallments.organizationId, context.organizationId)))
+      .returning({ id: paymentInstallments.id });
+    if (!row) throw new Error("Вноската не е намерена.");
+    refresh(data.projectId);
+  }, "Вноската не беше записана.");
+}
+
+/** Only an installment nothing was paid or claimed against; otherwise its history would lose its anchor. */
+export async function deleteInstallmentAction(formData: FormData): Promise<ActionResult> {
+  return attempt(async () => {
+    const { projectId, installmentId } = z.object({ projectId: uuid, installmentId: uuid }).parse(Object.fromEntries(formData));
+    const context = await requireTenantContext();
+    await requireProjectCapability(context, projectId, "payment");
+    await requireActiveProject(context.organizationId, projectId, { allowCompleted: true });
+    await getDatabase().transaction(async (tx) => {
+      const [receipt] = await tx.select({ id: projectReceipts.id }).from(projectReceipts).where(eq(projectReceipts.installmentId, installmentId)).limit(1);
+      const [claim] = await tx.select({ id: paymentClaims.id }).from(paymentClaims).where(eq(paymentClaims.installmentId, installmentId)).limit(1);
+      if (receipt || claim) throw new Error("По тази вноска има плащане. Промени сумата ѝ вместо да я изтриваш.");
+      const [removed] = await tx.delete(paymentInstallments)
+        .where(and(eq(paymentInstallments.id, installmentId), eq(paymentInstallments.projectId, projectId), eq(paymentInstallments.organizationId, context.organizationId)))
+        .returning({ id: paymentInstallments.id });
+      if (!removed) throw new Error("Вноската не е намерена.");
+    });
+    refresh(projectId);
+  }, "Вноската не беше изтрита.");
+}
+
+/** The offer a receipt belongs to: its installment's offer, else the chosen one, else none (unassigned). */
+async function receiptOffer(db: Executor, organizationId: string, projectId: string, installmentId: string | null, offerId: string | null) {
   if (installmentId) {
-    const [installment] = await getDatabase().select({ id: paymentInstallments.id }).from(paymentInstallments)
+    const [installment] = await db.select({ id: paymentInstallments.id, offerId: paymentInstallments.offerId }).from(paymentInstallments)
       .where(and(eq(paymentInstallments.id, installmentId), eq(paymentInstallments.projectId, projectId))).limit(1);
     if (!installment) throw new Error("Вноската не принадлежи на този обект.");
+    return installment.offerId;
   }
-  const currency = await currencyFor(context.organizationId, projectId);
-  await getDatabase().transaction(async (tx) => {
-    const [receipt] = await tx.insert(projectReceipts).values({ organizationId: context.organizationId, projectId, installmentId, kind, amount, currency, method, receivedOn, note: note || null, createdBy: context.userId }).returning({ id: projectReceipts.id });
-    await tx.insert(timelineEvents).values({ organizationId: context.organizationId, projectId, actorType: "staff", actorId: context.userId, eventType: "payment_received", visibility: "client", metadata: { receiptId: receipt!.id, amount, currency, receivedOn } });
-  });
-  refresh(projectId);
+  return offerOf(db, organizationId, projectId, offerId);
 }
 
-export async function correctReceiptAction(formData: FormData) {
-  const context = await requireTenantContext();
-  const projectId = projectIdFrom(formData);
-  await requireProjectCapability(context, projectId, "payment");
-  const receiptId = uuid.parse(formData.get("receiptId"));
-  const newAmount = moneyInput(formData.get("amount"));
-  const reason = z.string().trim().min(3).max(500).parse(formData.get("reason"));
-  const db = getDatabase();
-  await db.transaction(async (tx) => {
-    const [receipt] = await tx.select().from(projectReceipts).where(and(eq(projectReceipts.id, receiptId), eq(projectReceipts.projectId, projectId), eq(projectReceipts.organizationId, context.organizationId))).for("update").limit(1);
-    if (!receipt || receipt.correctionOfId) throw new Error("Плащането не може да се коригира.");
-    const [prior] = await tx.select({ id: projectReceipts.id }).from(projectReceipts).where(eq(projectReceipts.correctionOfId, receiptId)).limit(1);
-    if (prior) throw new Error("Това плащане вече е коригирано.");
-    await tx.insert(projectReceipts).values([
-      { organizationId: context.organizationId, projectId, correctionOfId: receiptId, installmentId: receipt.installmentId, kind: receipt.kind, amount: (-Number(receipt.amount)).toFixed(2), currency: receipt.currency, method: receipt.method, receivedOn: receipt.receivedOn, note: `Сторно: ${reason}`, createdBy: context.userId },
-      { organizationId: context.organizationId, projectId, correctionOfId: receiptId, installmentId: receipt.installmentId, kind: receipt.kind, amount: newAmount, currency: receipt.currency, method: receipt.method, receivedOn: receipt.receivedOn, note: `Корекция: ${reason}`, createdBy: context.userId },
-    ]);
-    await tx.update(paymentDisputes).set({ status: "resolved", resolution: `Плащането е коригирано: ${reason}`, resolvedAt: new Date(), resolvedBy: context.userId })
-      .where(and(eq(paymentDisputes.receiptId, receiptId), eq(paymentDisputes.status, "open")));
-    await tx.insert(timelineEvents).values({ organizationId: context.organizationId, projectId, actorType: "staff", actorId: context.userId, eventType: "payment_corrected", visibility: "client", metadata: { receiptId, newAmount, reason } });
+function emailReceipt(projectId: string, input: { amount: string; currency: string; receivedOn: string; method: string; corrected?: boolean }) {
+  emailClient(projectId, {
+    subject: input.corrected ? `Коригирано плащане: ${input.amount} ${input.currency}` : `Записано плащане: ${input.amount} ${input.currency}`,
+    intro: input.corrected
+      ? "Фирмата коригира записано плащане. Вярната сума вече е в портала."
+      : "Фирмата записа, че е получила плащане от теб. Провери дали всичко е вярно.",
+    facts: [["Сума", `${input.amount} ${input.currency}`], ["Дата", formatDay(input.receivedOn)], ["Начин", methodLabels[input.method] ?? input.method]],
+    cta: "Виж плащанията",
+    outro: "Ако нещо не е вярно, натисни „Не е вярно?“ до плащането в портала.",
   });
-  refresh(projectId);
 }
 
-export async function updateChangeWorkAction(formData: FormData) {
-  const context = await requireTenantContext();
-  const projectId = projectIdFrom(formData);
-  await requireProjectCapability(context, projectId, "milestone");
-  const changeOrderId = uuid.parse(formData.get("changeOrderId"));
-  const workStatus = z.enum(["not_started", "scheduled", "in_progress", "completed"]).parse(formData.get("workStatus"));
-  await getDatabase().transaction(async (tx) => {
-    const [change] = await tx.select({ id: changeOrders.id }).from(changeOrders)
-      .innerJoin(changeOrderRevisions, eq(changeOrderRevisions.id, changeOrders.currentRevisionId))
-      .where(and(eq(changeOrders.id, changeOrderId), eq(changeOrders.organizationId, context.organizationId), eq(changeOrders.projectId, projectId), eq(changeOrders.documentKind, "change"), eq(changeOrderRevisions.status, "approved"))).limit(1);
-    if (!change) throw new Error("Само одобрена промяна може да се изпълнява.");
-    await tx.update(changeOrders).set({ workStatus, updatedAt: new Date() }).where(eq(changeOrders.id, changeOrderId));
-    await tx.insert(timelineEvents).values({ organizationId: context.organizationId, projectId, changeOrderId, actorType: "staff", actorId: context.userId, eventType: "work_status_changed", visibility: "client", metadata: { workStatus } });
-  });
-  refresh(projectId);
+export async function recordReceiptAction(formData: FormData): Promise<ActionResult> {
+  return attempt(async () => {
+    const data = z.object({
+      projectId: uuid, installmentId: optionalUuid, offerId: optionalUuid, kind: paymentKind, amount: money, method: paymentMethod,
+      receivedOn: z.iso.date("Избери дата."), note: z.string().trim().max(500).optional(),
+    }).parse(Object.fromEntries(formData));
+    const context = await requireTenantContext();
+    await requireProjectCapability(context, data.projectId, "payment");
+    await requireActiveProject(context.organizationId, data.projectId, { allowCompleted: true });
+    const db = getDatabase();
+    const offerId = await receiptOffer(db, context.organizationId, data.projectId, data.installmentId, data.offerId);
+    await db.transaction(async (tx) => {
+      const [receipt] = await tx.insert(projectReceipts).values({ organizationId: context.organizationId, projectId: data.projectId, offerId, installmentId: data.installmentId, kind: data.kind, amount: data.amount, currency: "EUR", method: data.method, receivedOn: data.receivedOn, note: data.note || null, createdBy: context.userId }).returning({ id: projectReceipts.id });
+      await tx.insert(timelineEvents).values({ organizationId: context.organizationId, projectId: data.projectId, changeOrderId: offerId, actorType: "staff", actorId: context.userId, eventType: "payment_received", visibility: "client", metadata: { receiptId: receipt!.id, amount: data.amount, currency: "EUR", receivedOn: data.receivedOn } });
+    });
+    emailReceipt(data.projectId, { amount: data.amount, currency: "EUR", receivedOn: data.receivedOn, method: data.method });
+    refresh(data.projectId);
+  }, "Плащането не беше записано.");
 }
 
-export async function resolvePaymentDisputeAction(formData: FormData) {
-  const context = await requireTenantContext();
-  const projectId = projectIdFrom(formData);
-  await requireProjectCapability(context, projectId, "payment");
-  const disputeId = uuid.parse(formData.get("disputeId"));
-  const resolution = z.string().trim().min(3).max(1000).parse(formData.get("resolution"));
-  const [dispute] = await getDatabase().update(paymentDisputes).set({ status: "resolved", resolution, resolvedAt: new Date(), resolvedBy: context.userId })
-    .where(and(eq(paymentDisputes.id, disputeId), eq(paymentDisputes.projectId, projectId), eq(paymentDisputes.organizationId, context.organizationId), eq(paymentDisputes.status, "open")))
-    .returning({ id: paymentDisputes.id });
-  if (!dispute) throw new Error("Спорът не е намерен.");
-  refresh(projectId);
+export async function correctReceiptAction(formData: FormData): Promise<ActionResult> {
+  return attempt(async () => {
+    const data = z.object({ projectId: uuid, receiptId: uuid, amount: money, reason: z.string().trim().min(3, "Напиши причина.").max(500) }).parse(Object.fromEntries(formData));
+    const context = await requireTenantContext();
+    await requireProjectCapability(context, data.projectId, "payment");
+    await requireActiveProject(context.organizationId, data.projectId, { allowCompleted: true });
+    const receipt = await getDatabase().transaction(async (tx) => {
+      const [receipt] = await tx.select().from(projectReceipts).where(and(eq(projectReceipts.id, data.receiptId), eq(projectReceipts.projectId, data.projectId), eq(projectReceipts.organizationId, context.organizationId))).for("update").limit(1);
+      if (!receipt || receipt.correctionOfId) throw new Error("Плащането не може да се коригира.");
+      const [prior] = await tx.select({ id: projectReceipts.id }).from(projectReceipts).where(eq(projectReceipts.correctionOfId, data.receiptId)).limit(1);
+      if (prior) throw new Error("Това плащане вече е коригирано.");
+      const common = { organizationId: context.organizationId, projectId: data.projectId, offerId: receipt.offerId, correctionOfId: data.receiptId, installmentId: receipt.installmentId, kind: receipt.kind, currency: receipt.currency, method: receipt.method, receivedOn: receipt.receivedOn, createdBy: context.userId };
+      await tx.insert(projectReceipts).values([
+        { ...common, amount: (-Number(receipt.amount)).toFixed(2), note: `Сторно: ${data.reason}` },
+        { ...common, amount: data.amount, note: `Корекция: ${data.reason}` },
+      ]);
+      await tx.update(paymentDisputes).set({ status: "resolved", resolution: `Плащането е коригирано: ${data.reason}`, resolvedAt: new Date(), resolvedBy: context.userId })
+        .where(and(eq(paymentDisputes.receiptId, data.receiptId), eq(paymentDisputes.status, "open")));
+      await tx.insert(timelineEvents).values({ organizationId: context.organizationId, projectId: data.projectId, changeOrderId: receipt.offerId, actorType: "staff", actorId: context.userId, eventType: "payment_corrected", visibility: "client", metadata: { receiptId: data.receiptId, newAmount: data.amount, reason: data.reason } });
+      return receipt;
+    });
+    emailReceipt(data.projectId, { amount: data.amount, currency: receipt.currency, receivedOn: receipt.receivedOn, method: receipt.method, corrected: true });
+    refresh(data.projectId);
+  }, "Корекцията не беше записана.");
+}
+
+/** An unassigned receipt goes to one offer. Allowed once; the receipt is otherwise append-only. */
+export async function assignReceiptAction(formData: FormData): Promise<ActionResult> {
+  return attempt(async () => {
+    const { projectId, receiptId, offerId } = z.object({ projectId: uuid, receiptId: uuid, offerId: uuid }).parse(Object.fromEntries(formData));
+    const context = await requireTenantContext();
+    await requireProjectCapability(context, projectId, "payment");
+    await requireActiveProject(context.organizationId, projectId, { allowCompleted: true });
+    await getDatabase().transaction(async (tx) => {
+      await offerOf(tx, context.organizationId, projectId, offerId);
+      // A correction pair moves with the receipt it corrects.
+      const rows = await tx.update(projectReceipts).set({ offerId })
+        .where(and(eq(projectReceipts.projectId, projectId), eq(projectReceipts.organizationId, context.organizationId), isNull(projectReceipts.offerId), sql`(${projectReceipts.id} = ${receiptId} or ${projectReceipts.correctionOfId} = ${receiptId})`))
+        .returning({ id: projectReceipts.id });
+      if (!rows.length) throw new Error("Плащането вече е към оферта.");
+      await tx.insert(timelineEvents).values({ organizationId: context.organizationId, projectId, changeOrderId: offerId, actorType: "staff", actorId: context.userId, eventType: "payment_assigned", visibility: "client", metadata: { receiptId } });
+    });
+    refresh(projectId);
+  }, "Плащането не беше разпределено.");
+}
+
+export async function updateChangeWorkAction(formData: FormData): Promise<ActionResult> {
+  return attempt(async () => {
+    const { projectId, changeOrderId, workStatus } = z.object({ projectId: uuid, changeOrderId: uuid, workStatus: z.enum(["not_started", "scheduled", "in_progress", "completed"]) }).parse(Object.fromEntries(formData));
+    const context = await requireTenantContext();
+    await requireProjectCapability(context, projectId, "milestone");
+    await requireActiveProject(context.organizationId, projectId);
+    await getDatabase().transaction(async (tx) => {
+      const [change] = await tx.select({ id: changeOrders.id }).from(changeOrders)
+        .where(and(eq(changeOrders.id, changeOrderId), eq(changeOrders.organizationId, context.organizationId), eq(changeOrders.projectId, projectId), eq(changeOrders.documentKind, "change"), isNotNull(changeOrders.approvedRevisionId))).limit(1);
+      if (!change) throw new Error("Само одобрена промяна може да се изпълнява.");
+      await tx.update(changeOrders).set({ workStatus, updatedAt: new Date() }).where(eq(changeOrders.id, changeOrderId));
+      await tx.insert(timelineEvents).values({ organizationId: context.organizationId, projectId, changeOrderId, actorType: "staff", actorId: context.userId, eventType: "work_status_changed", visibility: "client", metadata: { workStatus } });
+    });
+    refresh(projectId);
+  }, "Статусът не беше обновен.");
+}
+
+export async function resolvePaymentDisputeAction(formData: FormData): Promise<ActionResult> {
+  return attempt(async () => {
+    const { projectId, disputeId, resolution } = z.object({ projectId: uuid, disputeId: uuid, resolution: z.string().trim().min(3, "Напиши кратко обяснение.").max(1000) }).parse(Object.fromEntries(formData));
+    const context = await requireTenantContext();
+    await requireProjectCapability(context, projectId, "payment");
+    await requireActiveProject(context.organizationId, projectId, { allowCompleted: true });
+    await getDatabase().transaction(async (tx) => {
+      const [dispute] = await tx.update(paymentDisputes).set({ status: "resolved", resolution, resolvedAt: new Date(), resolvedBy: context.userId })
+        .where(and(eq(paymentDisputes.id, disputeId), eq(paymentDisputes.projectId, projectId), eq(paymentDisputes.organizationId, context.organizationId), eq(paymentDisputes.status, "open")))
+        .returning({ id: paymentDisputes.id, receiptId: paymentDisputes.receiptId });
+      if (!dispute) throw new Error("Спорът не е намерен.");
+      await tx.insert(timelineEvents).values({ organizationId: context.organizationId, projectId, actorType: "staff", actorId: context.userId, eventType: "payment_dispute_resolved", visibility: "client", metadata: { receiptId: dispute.receiptId, resolution } });
+    });
+    emailClient(projectId, {
+      subject: "Фирмата отговори на оспорено плащане",
+      intro: "Фирмата прегледа плащането, което оспори, и отговори.",
+      facts: [["Отговор", resolution]],
+      cta: "Виж плащанията",
+      outro: "Ако още не си съгласен, можеш да оспориш плащането отново от портала.",
+    });
+    refresh(projectId);
+  }, "Спорът не беше разрешен.");
+}
+
+/** Confirms a client's "I paid": records the receipt the client reported (the company may fix the amount or date). */
+export async function confirmPaymentClaimAction(formData: FormData): Promise<ActionResult> {
+  return attempt(async () => {
+    const data = z.object({ projectId: uuid, claimId: uuid, amount: money, receivedOn: z.iso.date("Избери дата."), kind: paymentKind }).parse(Object.fromEntries(formData));
+    const context = await requireTenantContext();
+    await requireProjectCapability(context, data.projectId, "payment");
+    await requireActiveProject(context.organizationId, data.projectId, { allowCompleted: true });
+    const claim = await getDatabase().transaction(async (tx) => {
+      const [claim] = await tx.select().from(paymentClaims)
+        .where(and(eq(paymentClaims.id, data.claimId), eq(paymentClaims.projectId, data.projectId), eq(paymentClaims.organizationId, context.organizationId), eq(paymentClaims.status, "pending"))).for("update").limit(1);
+      if (!claim) throw new Error("Отбелязването вече е обработено.");
+      const [receipt] = await tx.insert(projectReceipts).values({
+        organizationId: context.organizationId, projectId: data.projectId, offerId: claim.offerId, installmentId: claim.installmentId, kind: data.kind,
+        amount: data.amount, currency: claim.currency, method: claim.method, receivedOn: data.receivedOn, note: claim.note, createdBy: context.userId,
+      }).returning({ id: projectReceipts.id });
+      await tx.update(paymentClaims).set({ status: "confirmed", receiptId: receipt!.id, resolvedBy: context.userId, resolvedAt: new Date() }).where(eq(paymentClaims.id, claim.id));
+      await tx.insert(timelineEvents).values({ organizationId: context.organizationId, projectId: data.projectId, changeOrderId: claim.offerId, actorType: "staff", actorId: context.userId, eventType: "payment_received", visibility: "client", metadata: { receiptId: receipt!.id, amount: data.amount, currency: claim.currency, receivedOn: data.receivedOn, claimId: claim.id } });
+      return claim;
+    });
+    emailReceipt(data.projectId, { amount: data.amount, currency: claim.currency, receivedOn: data.receivedOn, method: claim.method });
+    refresh(data.projectId);
+  }, "Плащането не беше потвърдено.");
+}
+
+export async function rejectPaymentClaimAction(formData: FormData): Promise<ActionResult> {
+  return attempt(async () => {
+    const { projectId, claimId, response } = z.object({ projectId: uuid, claimId: uuid, response: z.string().trim().min(3, "Напиши на клиента защо.").max(1000) }).parse(Object.fromEntries(formData));
+    const context = await requireTenantContext();
+    await requireProjectCapability(context, projectId, "payment");
+    const [claim] = await getDatabase().update(paymentClaims).set({ status: "rejected", response, resolvedBy: context.userId, resolvedAt: new Date() })
+      .where(and(eq(paymentClaims.id, claimId), eq(paymentClaims.projectId, projectId), eq(paymentClaims.organizationId, context.organizationId), eq(paymentClaims.status, "pending")))
+      .returning({ amount: paymentClaims.amount, currency: paymentClaims.currency, paidOn: paymentClaims.paidOn });
+    if (!claim) throw new Error("Отбелязването вече е обработено.");
+    emailClient(projectId, {
+      subject: "Плащането ти още не е потвърдено",
+      intro: `Фирмата още не може да потвърди плащането от ${formatDay(claim.paidOn)} за ${Number(claim.amount).toFixed(2)} ${claim.currency}. Виж отговора ѝ по-долу. Ако имаш потвърждение за плащането, пиши ѝ от портала, за да го изясните.`,
+      facts: [["Отговор", response]],
+      cta: "Виж плащанията",
+    });
+    refresh(projectId);
+  }, "Отговорът не беше записан.");
+}
+
+/**
+ * Asks the client to accept the work of one approved offer. Usually when all its stages are done;
+ * after the client lists issues, the company fixes them and asks again.
+ */
+export async function requestAcceptanceAction(formData: FormData): Promise<ActionResult> {
+  return attempt(async () => {
+    const { projectId, offerId, note } = z.object({ projectId: uuid, offerId: uuid, note: z.string().trim().max(2000).optional() }).parse(Object.fromEntries(formData));
+    const context = await requireTenantContext();
+    await requireProjectCapability(context, projectId, "milestone");
+    await requireActiveProject(context.organizationId, projectId);
+    const title = await getDatabase().transaction(async (tx) => {
+      const [offer] = await tx.select({ title: changeOrderRevisions.title }).from(changeOrders)
+        .innerJoin(changeOrderRevisions, eq(changeOrderRevisions.id, changeOrders.approvedRevisionId))
+        .where(and(eq(changeOrders.id, offerId), eq(changeOrders.projectId, projectId), eq(changeOrders.organizationId, context.organizationId), eq(changeOrders.documentKind, "offer"))).limit(1);
+      if (!offer) throw new Error("Офертата още не е одобрена.");
+      const [latest] = await tx.select({ kind: offerAcceptances.kind }).from(offerAcceptances).where(eq(offerAcceptances.offerId, offerId)).orderBy(sql`${offerAcceptances.createdAt} desc`).limit(1);
+      if (latest?.kind === "accepted") throw new Error("Клиентът вече прие тази работа.");
+      if (latest?.kind === "requested") throw new Error("Приемането вече чака клиента.");
+      await tx.insert(offerAcceptances).values({ organizationId: context.organizationId, projectId, offerId, kind: "requested", note: note || null, actorType: "staff", actorId: context.userId });
+      await tx.insert(timelineEvents).values({ organizationId: context.organizationId, projectId, changeOrderId: offerId, actorType: "staff", actorId: context.userId, eventType: "acceptance_requested", visibility: "client", metadata: { note: note || null } });
+      return offer.title;
+    });
+    emailClient(projectId, {
+      subject: `Работата по „${title}“ чака твоя преглед`,
+      intro: `Фирмата отбеляза работата по „${title}“ като завършена и те моли да я прегледаш. В портала можеш да я приемеш или да опишеш забележките си. Всяка забележка остава записана, за да я обсъдите, докато и двете страни са удовлетворени.`,
+      facts: note ? [["Бележка от фирмата", note]] : undefined,
+      cta: "Прегледай и приеми",
+    });
+    refresh(projectId);
+  }, "Искането не беше изпратено.");
 }

@@ -2,6 +2,7 @@
 
 import { vatRateOptions } from "@/modules/change-orders/labels";
 import { cn } from "@/lib/utils";
+import { segmentClassName, segmentGroupClassName } from "@/components/workspace/segmented";
 
 /** Segmented VAT choice; submits `taxRate` with the surrounding form. */
 export function VatRateField({
@@ -9,12 +10,15 @@ export function VatRateField({
   defaultValue,
   onChange,
   name = "taxRate",
+  compact = false,
   className,
 }: {
   value?: string;
   defaultValue?: string;
   onChange?: (value: string) => void;
   name?: string;
+  /** Settings rows show the label and the hint themselves. */
+  compact?: boolean;
   className?: string;
 }) {
   const normalize = (rate: string | undefined) => (rate === undefined ? undefined : String(Number(rate)));
@@ -22,13 +26,10 @@ export function VatRateField({
   const initial = normalize(defaultValue);
   return (
     <fieldset className={cn("min-w-0", className)}>
-      <legend className="mb-1.5 text-sm font-medium">ДДС</legend>
-      <div className="grid h-11 grid-cols-3 gap-1 rounded-xl bg-sidebar p-1 shadow-sm">
+      <legend className={compact ? "sr-only" : "mb-1.5 text-sm font-medium"}>ДДС</legend>
+      <div className={segmentGroupClassName}>
         {vatRateOptions.map((option) => (
-          <label
-            key={option.value}
-            className="relative flex cursor-pointer items-center justify-center rounded-lg px-2 text-center text-sm font-medium whitespace-nowrap text-sidebar-foreground/70 transition-all hover:bg-sidebar-accent hover:text-sidebar-foreground has-checked:bg-primary has-checked:font-semibold has-checked:text-primary-foreground has-checked:shadow-sm has-checked:hover:bg-primary has-focus-visible:ring-3 has-focus-visible:ring-ring/50"
-          >
+          <label key={option.value} className={segmentClassName}>
             <input
               type="radio"
               name={name}
@@ -42,7 +43,7 @@ export function VatRateField({
           </label>
         ))}
       </div>
-      <p className="mt-1.5 text-xs text-muted-foreground">
+      <p className={cn("mt-1.5 text-xs text-muted-foreground", compact && "hidden")}>
         „Без ДДС“ е за фирми, които не са регистрирани по ЗДДС, или за необлагаеми услуги.
       </p>
     </fieldset>
