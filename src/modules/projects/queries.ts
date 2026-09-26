@@ -116,8 +116,11 @@ export async function getProject(organizationId: string, projectId: string) {
       contactPhone: projectContacts.phone,
       contactRole: projectContacts.portalRole,
       contactEmailVerifiedAt: projectContacts.emailVerifiedAt,
+      clientId: clients.id,
+      clientName: clients.name,
     })
     .from(projects)
+    .leftJoin(clients, eq(clients.id, projects.clientId))
     .leftJoin(
       projectContacts,
       and(

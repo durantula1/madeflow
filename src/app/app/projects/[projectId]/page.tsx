@@ -3,7 +3,7 @@ import { Suspense, type ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { after } from "next/server";
-import { Eye, Lock, MapPin, Pencil, Plus, Trash2 } from "lucide-react";
+import { Contact, Eye, Lock, MapPin, Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BreadcrumbCurrent } from "@/components/workspace/app-breadcrumb";
@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/workspace/confirm-dialog";
 import { DataTable, DataTableSkeleton, type DataTableColumn } from "@/components/workspace/data-table";
 import { DetailHeader } from "@/components/workspace/detail-header";
+import { seesClients } from "@/modules/clients/access";
 import { EmptyResult } from "@/components/workspace/page/empty-result";
 import { PageShell } from "@/components/workspace/page/page-shell";
 import { StatCard } from "@/components/workspace/stat-card";
@@ -169,6 +170,11 @@ export default async function ProjectPage({ params, searchParams }: PageProps<"/
         status={<Badge className="h-6 bg-sidebar px-2.5 text-sidebar-foreground">{projectStatusLabels[project.status] ?? project.status}</Badge>}
         metadata={<>
           <span className="inline-flex min-w-0 items-center gap-1.5"><MapPin className="size-4" /> {project.siteAddress}</span>
+          {project.clientId && project.clientName ? (
+            seesClients(context)
+              ? <Link href={`/app/clients/${project.clientId}`} className="inline-flex items-center gap-1.5 hover:text-foreground hover:underline"><Contact className="size-4" /> {project.clientName}</Link>
+              : <span className="inline-flex items-center gap-1.5"><Contact className="size-4" /> {project.clientName}</span>
+          ) : null}
           <span>от {sinceFormat.format(project.createdAt)}</span>
         </>}
         action={
