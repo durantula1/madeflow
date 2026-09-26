@@ -17,29 +17,42 @@ import { requireOwner, requirePermission, requireProjectCapability } from "@/lib
 import { attempt, type ActionResult } from "@/lib/action-result";
 import { requireActiveProject } from "@/modules/projects/lifecycle";
 import { createClient } from "@/modules/clients/operations";
+import { findClientDuplicate, findUsableClient } from "@/modules/clients/queries";
 
 const projectSchema = z.object({
   name: z.string().trim().min(2, "Въведи име на обекта.").max(160),
   siteAddress: z.string().trim().min(3, "Въведи адрес.").max(300),
   reference: z.string().trim().max(80).optional(),
-  contactName: z.string().trim().min(2, "Въведи име на клиента.").max(160),
-  contactEmail: z.union([z.literal(""), z.email("Невалиден имейл.")]),
+  contactName: z.string().trim().max(160).optional(),
+  contactEmail: z.union([z.literal(""), z.email("Невалиден имейл.")]).optional(),
   contactPhone: z.string().trim().max(40).optional(),
+  clientId: z.union([z.literal(""), z.uuid()]).optional(),
 });
 
-export async function createProjectAction(formData: FormData) {
-  const data = projectSchema.parse(Object.fromEntries(formData));
+export async function createProjectAction(formData: FormData): Promise<ActionResult | void> {
+  const parsed = projectSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Провери полетата." };
+  const data = parsed.data;
   const context = await requireTenantContext();
   await requirePermission(context, "projects.create");
   const database = getDatabase();
 
+  // An existing client brings their details; a new one must not repeat someone already on file.
+  const existing = data.clientId ? await findUsableClient(context, data.clientId) : null;
+  if (data.clientId && !existing) return { error: "Клиентът не е намерен. Избери го отново." };
+  const contact = existing
+    ? { name: existing.name, email: existing.email, phone: existing.phone }
+    : { name: data.contactName ?? "", email: data.contactEmail || null, phone: data.contactPhone || null };
+  if (!existing) {
+    if (contact.name.length < 2) return { error: "Въведи име на клиента." };
+    const duplicate = await findClientDuplicate(context, contact);
+    if (duplicate) {
+      return { error: `Клиент с този имейл или телефон вече съществува: ${duplicate.name} (${duplicate.projects} ${duplicate.projects === 1 ? "обект" : "обекта"}). Избери го от „Съществуващ клиент“.` };
+    }
+  }
+
   const projectId = await database.transaction(async (transaction) => {
-    const contact = {
-      name: data.contactName,
-      email: data.contactEmail || null,
-      phone: data.contactPhone || null,
-    };
-    const clientId = await createClient(transaction, {
+    const clientId = existing?.id ?? await createClient(transaction, {
       organizationId: context.organizationId,
       createdBy: context.userId,
       ...contact,
@@ -83,6 +96,7 @@ export async function createProjectAction(formData: FormData) {
   });
 
   revalidatePath("/app/projects");
+  revalidatePath("/app/clients");
   redirect(`/app/projects/${projectId}?notice=project-created`);
 }
 

@@ -1,16 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { BookOpen, Compass, Euro, LayoutDashboard, Menu, Users } from "lucide-react";
+import { BookOpen, Compass, Contact, Euro, LayoutDashboard, Menu, Users } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
-export function MobileMoreMenu({ owner, finance }: { owner: boolean; finance: boolean }) {
+export function MobileMoreMenu({ owner, finance, clients }: { owner: boolean; finance: boolean; clients: boolean }) {
   const [open, setOpen] = useState(false);
   const items = [
     { href: "/app", label: "Работен преглед", icon: LayoutDashboard },
+    ...(clients ? [{ href: "/app/clients", label: "Клиенти", icon: Contact }] : []),
     { href: "/app/catalog", label: "Каталог и шаблони", icon: BookOpen },
     ...(owner ? [{ href: "/app/team", label: "Екип", icon: Users }] : []),
     ...(finance ? [{ href: "/app/finance", label: "Плащания", icon: Euro }] : []),

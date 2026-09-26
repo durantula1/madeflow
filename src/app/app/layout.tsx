@@ -3,6 +3,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
+  Contact,
   BookOpen,
   Compass,
   Bell,
@@ -17,6 +18,7 @@ import {
 import { Wordmark } from "@/components/brand/wordmark";
 import { LiveNotifications } from "@/components/workspace/live-notifications";
 import { NavLink } from "@/components/workspace/nav-link";
+import { seesClients } from "@/modules/clients/access";
 import { NavigationProgress } from "@/components/workspace/navigation-progress";
 import { DownloadTray } from "@/components/workspace/download-tray";
 import { MobileMoreMenu } from "@/components/workspace/mobile-more-menu";
@@ -79,6 +81,7 @@ export default async function WorkspaceLayout({
             label="Обекти"
             icon={<Building2 className="size-4" />}
           />
+          {seesClients(context) ? <NavLink href="/app/clients" label="Клиенти" icon={<Contact className="size-4" />} /> : null}
           <NavLink
             href="/app/offers"
             label="Оферти"
@@ -145,7 +148,7 @@ export default async function WorkspaceLayout({
             badge={unreadBadge}
             variant="tab"
           />
-          <MobileMoreMenu owner={context.role === "owner"} finance={can(context, "finance.view")} />
+          <MobileMoreMenu owner={context.role === "owner"} finance={can(context, "finance.view")} clients={seesClients(context)} />
         </nav>
       </section>
     </div>

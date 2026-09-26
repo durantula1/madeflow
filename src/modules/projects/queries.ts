@@ -3,14 +3,28 @@ import "server-only";
 import { and, desc, eq, exists, ilike, isNull, or, sql } from "drizzle-orm";
 
 import { getDatabase } from "@/db";
-import { changeOrders, projectContacts, projectMembers, projectMilestones, projects } from "@/db/schema";
+import { changeOrders, clients, projectContacts, projectMembers, projectMilestones, projects } from "@/db/schema";
 import { seesAllProjects } from "@/lib/authz/project-access";
 import type { TenantContext } from "@/lib/authz/tenant-context";
 import { portalLinkFor } from "@/modules/change-portal/links";
 
+/** Name, address, reference, and the client's name, email or phone. */
+function projectSearch(query: string) {
+  return or(
+    ilike(projects.name, `%${query}%`),
+    ilike(projects.siteAddress, `%${query}%`),
+    ilike(projects.reference, `%${query}%`),
+    ilike(projectContacts.name, `%${query}%`),
+    ilike(clients.name, `%${query}%`),
+    ilike(clients.email, `%${query}%`),
+    ilike(clients.phone, `%${query}%`),
+  );
+}
+
 export async function listProjects(context: TenantContext, filters: {
   query?: string;
   status?: "active" | "completed" | "archived";
+  clientId?: string;
   limit: number;
   offset?: number;
 }) {
@@ -25,9 +39,12 @@ export async function listProjects(context: TenantContext, filters: {
       status: projects.status,
       updatedAt: projects.updatedAt,
       contactName: projectContacts.name,
+      clientId: clients.id,
+      clientName: clients.name,
       openChanges: sql<number>`count(${changeOrders.id}) filter (where ${changeOrders.lifecycleStatus} = 'open')::int`,
     })
     .from(projects)
+    .leftJoin(clients, eq(clients.id, projects.clientId))
     .leftJoin(
       projectContacts,
       and(
@@ -49,16 +66,12 @@ export async function listProjects(context: TenantContext, filters: {
         // The archive is its own filter; every other view leaves archived projects out.
         filters.status === "archived" ? undefined : isNull(projects.archivedAt),
         filters.status ? eq(projects.status, filters.status) : undefined,
-        filters.query ? or(
-          ilike(projects.name, `%${filters.query}%`),
-          ilike(projects.siteAddress, `%${filters.query}%`),
-          ilike(projects.reference, `%${filters.query}%`),
-          ilike(projectContacts.name, `%${filters.query}%`),
-        ) : undefined,
+        filters.clientId ? eq(projects.clientId, filters.clientId) : undefined,
+        filters.query ? projectSearch(filters.query) : undefined,
         seesAllProjects(context) ? undefined : exists(db.select({ id: projectMembers.projectId }).from(projectMembers).where(and(eq(projectMembers.projectId, projects.id), eq(projectMembers.userId, context.userId)))),
       ),
     )
-    .groupBy(projects.id, projectContacts.id)
+    .groupBy(projects.id, projectContacts.id, clients.id)
     .orderBy(desc(projects.updatedAt))
     .limit(filters.limit)
     .offset(filters.offset ?? 0);
@@ -67,21 +80,19 @@ export async function listProjects(context: TenantContext, filters: {
 export async function countProjects(context: TenantContext, filters?: {
   query?: string;
   status?: "active" | "completed" | "archived";
+  clientId?: string;
 }) {
   const db = getDatabase();
   const [row] = await db.select({ total: sql<number>`count(distinct ${projects.id})::int` })
     .from(projects)
     .leftJoin(projectContacts, and(eq(projectContacts.projectId, projects.id), eq(projectContacts.isPrimary, true), isNull(projectContacts.removedAt)))
+    .leftJoin(clients, eq(clients.id, projects.clientId))
     .where(and(
       eq(projects.organizationId, context.organizationId),
       filters?.status === "archived" ? undefined : isNull(projects.archivedAt),
       filters?.status ? eq(projects.status, filters.status) : undefined,
-      filters?.query ? or(
-        ilike(projects.name, `%${filters.query}%`),
-        ilike(projects.siteAddress, `%${filters.query}%`),
-        ilike(projects.reference, `%${filters.query}%`),
-        ilike(projectContacts.name, `%${filters.query}%`),
-      ) : undefined,
+      filters?.clientId ? eq(projects.clientId, filters.clientId) : undefined,
+      filters?.query ? projectSearch(filters.query) : undefined,
       seesAllProjects(context) ? undefined : exists(db.select({ id: projectMembers.projectId }).from(projectMembers).where(and(eq(projectMembers.projectId, projects.id), eq(projectMembers.userId, context.userId)))),
     ));
   return row?.total ?? 0;

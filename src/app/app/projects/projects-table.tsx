@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
@@ -6,20 +7,21 @@ import { ListPagination, ListPaginationSkeleton } from "@/components/workspace/l
 import { EmptyState } from "@/components/workspace/page/page-shell";
 import type { TenantContext } from "@/lib/authz/tenant-context";
 import { lastPage, PAGE_SIZE, pageHref, pageOffset } from "@/lib/pagination";
+import { seesClients } from "@/modules/clients/access";
 import { countProjects, listProjects } from "@/modules/projects/queries";
 
 const label = "Обекти";
 
 const columns: DataTableColumn[] = [
   { id: "name", header: "Обект", skeleton: "stack" },
-  { id: "contact", header: "Контакт" },
+  { id: "client", header: "Клиент" },
   { id: "status", header: "Статус", skeleton: "badge" },
   { id: "open", header: "Отворени", className: "text-right" },
 ];
 
 export async function ProjectsTable({ context, filters, page, searchState }: {
   context: TenantContext;
-  filters: { query: string; status?: "active" | "completed" | "archived" };
+  filters: { query: string; status?: "active" | "completed" | "archived"; clientId?: string };
   page: number;
   searchState: Record<string, string>;
 }) {
@@ -28,6 +30,7 @@ export async function ProjectsTable({ context, filters, page, searchState }: {
     countProjects(context, filters),
   ]);
   if (!projects.length && page > lastPage(total)) redirect(pageHref("/app/projects", searchState, "page", lastPage(total)));
+  const linkClients = seesClients(context);
   if (!projects.length) return <EmptyState title="Добави първия обект" description="Необходим е обект и approver преди изпращане на промяна." />;
   return <DataTable
     label={label}
@@ -37,7 +40,11 @@ export async function ProjectsTable({ context, filters, page, searchState }: {
       href: `/app/projects/${project.id}`,
       cells: [
         <div key="name"><p className="font-medium">{project.name}</p><p className="text-sm text-muted-foreground">{project.siteAddress}</p></div>,
-        project.contactName ?? "Без контакт",
+        project.clientId && project.clientName
+          ? linkClients
+            ? <Link key="client" href={`/app/clients/${project.clientId}`} className="font-medium hover:underline">{project.clientName}</Link>
+            : project.clientName
+          : project.contactName ?? "Без клиент",
         <Badge key="status" variant={project.status === "active" ? "info-soft" : "secondary"}>{project.status === "active" ? "Активен" : project.status === "completed" ? "Приключен" : "В архива"}</Badge>,
         project.openChanges,
       ],
