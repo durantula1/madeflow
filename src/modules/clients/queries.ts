@@ -94,7 +94,8 @@ export async function getClient(context: TenantContext, clientId: string) {
       status: projects.status,
       archivedAt: projects.archivedAt,
       updatedAt: projects.updatedAt,
-      openChanges: sql<number>`count(${changeOrders.id}) filter (where ${changeOrders.lifecycleStatus} = 'open' and ${changeOrders.archivedAt} is null)::int`,
+      waiting: sql<number>`count(${changeOrders.id}) filter (where ${changeOrders.lifecycleStatus} = 'open' and ${changeOrders.archivedAt} is null and exists (select 1 from app.change_order_revisions r where r.id = ${changeOrders.currentRevisionId} and r.status in ('sent', 'viewed')))::int`,
+      documents: sql<number>`count(${changeOrders.id}) filter (where ${changeOrders.archivedAt} is null)::int`,
     })
     .from(projects)
     .leftJoin(changeOrders, eq(changeOrders.projectId, projects.id))

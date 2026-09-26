@@ -13,7 +13,7 @@ const label = "Клиенти";
 const columns: DataTableColumn[] = [
   { id: "name", header: "Клиент", skeleton: "stack" },
   { id: "projects", header: "Обекти", className: "text-right" },
-  { id: "waiting", header: "Чака решение", skeleton: "badge", className: "text-right" },
+  { id: "waiting", header: "Чака клиента", skeleton: "badge", className: "text-right" },
 ];
 
 export async function ClientsTable({ context, filters, page, searchState }: {
